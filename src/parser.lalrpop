@@ -1,0 +1,178 @@
+use crate::ast::{Expr, Type, AddOp, MulOp, RelOp, Direction, Variable};
+
+grammar;
+
+pub Expr: Box<Expr> = {
+    <e:LetRec> => e,
+};
+
+LetRec: Box<Expr> = {
+    <e:Let> => e,
+    "letrec" <x:Variable> ":" <tau:Type> "=" <evar:LetRec> "in" <ebody:LetRec> => {
+        let xclone = x.clone();
+        let tauclone = tau.clone();
+        let lam = Box::new(Expr::Lam { x: xclone, tau: tauclone, e: ebody });
+        let arg = Box::new(Expr::Fix { x, tau, e: evar });
+        Box::new(Expr::App { lam, arg })
+    }
+};
+
+Let: Box<Expr> = {
+    <e:App> => e,
+    "let" <x:Variable> ":" <tau:Type> "=" <evar:Let> "in" <ebody:Let> => Box::new(Expr::App { lam: Box::new(Expr::Lam { x, tau, e: ebody }), arg: evar }),
+};
+
+App: Box<Expr> = {
+    <e:Func> => e,
+    <lam:App> <arg:Func> => Box::new(Expr::App { lam, arg }),
+};
+
+Func: Box<Expr> = {
+    <e:Import> => e,
+    "fun" "(" <x:Variable> ":" <tau:Type> ")" "->" <e:Func> => Box::new(Expr::Lam { x, tau, e }),
+};
+
+Import: Box<Expr> = {
+    <e:Export> => e,
+    "import" "(" <x:Variable> "," <a:Variable> ")" "=" <e_mod:Import> "in" <e_body:Export> => Box::new(Expr::Import { x, a, e_mod, e_body }),
+};
+
+Export: Box<Expr> = {
+    <e:UnFold> => e,
+    "export" <e:UnFold> "without" <tau_adt:Type> "as" <tau_mod:Type> => Box::new(Expr::Export { e, tau_adt, tau_mod }),
+};
+
+UnFold: Box<Expr> = {
+    <e:Fold> => e,
+    "unfold" <e:Fold> => Box::new(Expr::Unfold(e)),    
+};
+
+Fold: Box<Expr> = {
+    <e:TyApp> => e,
+    "fold" <e:TyApp> "as" <tau:Type> => Box::new(Expr::Fold { e, tau }),
+};
+
+TyApp: Box<Expr> = {
+    <e:TyLam> => e,
+    <e:TyLam> "[" <tau:Type> "]" => Box::new(Expr::TyApp { e, tau }),
+}
+
+TyLam: Box<Expr> = {
+    <e:If> => e,
+    "tyfun" <a:Variable> "->" <e:If> => Box::new(Expr::TyLam { a, e }),
+};
+
+If: Box<Expr> = {
+    <e:Case> => e,
+    "if" <cond:Case> "then" <then_:Case> "else" <else_:Case> => Box::new(Expr::If { cond, then_, else_ }),
+};
+
+Case: Box<Expr> = {
+    <e:Inject> => e,
+    "case" <e:Inject> "{" "left" "(" <xleft:Variable> ")" "->" <eleft:Inject> "|" "right" "(" <xright:Variable> ")" "->" <eright:Inject> "}" => Box::new(Expr::Case { e, xleft, eleft, xright, eright }),
+};
+
+Inject: Box<Expr> = {
+    <e:Project> => e,
+    "inject" <e:Project> "=" <d:Direction> "as" <tau:Type> => Box::new(Expr::Inject { e, d, tau }),
+};
+
+Project: Box<Expr> = {
+    <e:AndExpr> => e,
+    <e:AndExpr> "." <d:Direction> => Box::new(Expr::Project { e, d }),
+};
+
+OrExpr: Box<Expr> = {
+    <e:AndExpr> => e,
+    <left:OrExpr> "||" <right:AndExpr> => Box::new(Expr::Or { left, right }),
+};
+
+AndExpr: Box<Expr> = {
+    <e:RelExpr> => e,
+    <left:AndExpr> "&&" <right:RelExpr> => Box::new(Expr::And { left, right }),
+};
+
+RelExpr: Box<Expr> = {
+    <e:AddExpr> => e,
+    <left:RelExpr> <relop:RelOp> <right:AddExpr> => Box::new(Expr::Relop { relop, left, right }),
+};
+
+AddExpr: Box<Expr> = {
+    <e:MulExpr> => e,
+    <left:AddExpr> <binop:AddOp> <right:MulExpr> => Box::new(Expr::Addop { binop, left, right }),
+};
+
+MulExpr: Box<Expr> = {
+    <e:PrimaryExpr> => e,
+    <left:MulExpr> <binop:MulOp> <right:PrimaryExpr> => Box::new(Expr::Mulop { binop, left, right }),
+};
+
+PrimaryExpr: Box<Expr> = {
+    "(" <e:Expr> ")" => e,
+    "(" <left:Expr> "," <right:Expr> ")" => Box::new(Expr::Pair { left, right }),
+
+    <n:NUM> => Box::new(Expr::Num(n)),
+    <v:Variable> => Box::new(Expr::Var(v)),
+    "true" => Box::new(Expr::True),
+    "false" => Box::new(Expr::False),
+    "(" ")" => Box::new(Expr::Unit),
+}
+
+AddOp: AddOp = {
+    "+" => AddOp::Add,
+    "-" => AddOp::Sub,
+};
+
+MulOp: MulOp = {
+    "*" => MulOp::Mul,
+    "/" => MulOp::Div,
+};
+
+RelOp: RelOp = {
+    "==" => RelOp::Eq,
+    ">" => RelOp::Gt,
+    "<" => RelOp::Lt,
+};
+
+Direction: Direction = {
+    "L" => Direction::Left,
+    "R" => Direction::Right,
+};
+
+Type: Box<Type> = {
+    "rec" <a:Variable> "." <tau:Type> => Box::new(Type::Rec { a, tau }),
+    "forall" <a:Variable> "." <tau:Type> => Box::new(Type::Forall { a, tau }),
+    "exists" <a:Variable> "." <tau:Type> => Box::new(Type::Exists { a, tau }),
+    <t:FuncType> => t,
+};
+
+FuncType: Box<Type> = {
+    <t:ProductType> => t,
+    <arg:ProductType> "->" <ret:FuncType> => Box::new(Type::Fn { arg, ret }),
+};
+
+ProductType: Box<Type> = {
+    <t:SumType> => t,
+    <left:SumType> "*" <right:ProductType> => Box::new(Type::Product { left, right }),
+};
+
+SumType: Box<Type> = {
+    <t:PrimaryType> => t,
+    <left:PrimaryType> "+" <right:SumType> => Box::new(Type::Sum { left, right }),
+};
+
+PrimaryType: Box<Type> = {
+    "(" <t:Type> ")" => t,
+    <v:Variable> => Box::new(Type::Var(v)),
+    "num" => Box::new(Type::Num),
+    "bool" => Box::new(Type::Bool),
+    "unit" => Box::new(Type::Unit),
+};
+
+Variable: Variable = {
+    <v:r"[a-zA-Z][a-zA-Z0-9_]*"> => Variable(v.to_string()),
+};
+
+NUM: i32 = {
+    <n:r"-?[0-9]+"> => n.parse().unwrap(),
+};

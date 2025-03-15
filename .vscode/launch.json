@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "run",
+            "cwd": "${workspaceFolder}",
+            "cargo": {
+                "args": [
+                    "build",
+                ]
+            },
+            "args": [
+                "test.lam",
+                "--ast"
+            ]
+        },
+    ]
+}
