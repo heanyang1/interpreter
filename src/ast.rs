@@ -21,10 +21,28 @@ pub enum AddOp {
     Sub,
 }
 
+impl std::fmt::Display for AddOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AddOp::Add => write!(f, "+"),
+            AddOp::Sub => write!(f, "-"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MulOp {
     Mul,
     Div,
+}
+
+impl std::fmt::Display for MulOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MulOp::Mul => write!(f, "*"),
+            MulOp::Div => write!(f, "/"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +50,16 @@ pub enum RelOp {
     Lt,
     Gt,
     Eq,
+}
+
+impl std::fmt::Display for RelOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RelOp::Lt => write!(f, "<"),
+            RelOp::Gt => write!(f, ">"),
+            RelOp::Eq => write!(f, "="),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

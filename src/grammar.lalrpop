@@ -174,5 +174,5 @@ Variable: Variable = {
 };
 
 NUM: i32 = {
-    <n:r"-?[0-9]+"> => n.parse().unwrap(),
+    <n:r"[0-9]+"> => n.parse().unwrap(),
 };

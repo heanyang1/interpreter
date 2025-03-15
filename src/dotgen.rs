@@ -42,29 +42,12 @@ impl ToGraph for Expr {
         match self {
             Expr::Var(x) => x.to_graph(graph, parent),
             Expr::Num(n) => add_node!(n, graph, parent;),
-            Expr::Addop { binop, left, right } => add_node!(
-                match binop {
-                    AddOp::Add => "+",
-                    AddOp::Sub => "-",
-                },
-                graph, parent; left, right
-            ),
-
-            Expr::Mulop { binop, left, right } => add_node!(
-                match binop {
-                    MulOp::Mul => "*",
-                    MulOp::Div => "/",
-                },
-                graph, parent; left, right
-            ),
+            Expr::Addop { binop, left, right } => add_node!(binop, graph, parent; left, right),
+            Expr::Mulop { binop, left, right } => add_node!(binop, graph, parent; left, right),
             Expr::True => add_node!("true", graph, parent;),
             Expr::False => add_node!("false", graph, parent;),
             Expr::If { cond, then_, else_ } => add_node!("if", graph, parent; cond, then_, else_),
-            Expr::Relop { left, right, relop } => add_node!(match relop {
-                RelOp::Eq => "=",
-                RelOp::Lt => "<",
-                RelOp::Gt => ">",
-            }, graph, parent; left, right),
+            Expr::Relop { left, right, relop } => add_node!(relop, graph, parent; left, right),
             Expr::And { left, right } => add_node!("&&", graph, parent; left, right),
             Expr::Or { left, right } => add_node!("||", graph, parent; left, right),
             Expr::Pair { left, right } => add_node!("pair", graph, parent; left, right),
