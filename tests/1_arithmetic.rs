@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use interpreter::ast::*;
-    use interpreter::interpreter::eval;
+    use interpreter::evaluate::eval;
     use interpreter::typecheck::type_check;
     use interpreter::flags::Verbosity;
     use interpreter::parser::parse;

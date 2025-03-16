@@ -6,6 +6,6 @@ lalrpop_mod!(grammar);
 
 pub fn parse(input: &str) -> Result<Box<Expr>, String> {
     grammar::ExprParser::new()
-        .parse(&input)
+        .parse(input)
         .map_err(|e| e.to_string())
 }

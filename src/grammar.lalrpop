@@ -78,8 +78,8 @@ Inject: Box<Expr> = {
 };
 
 Project: Box<Expr> = {
-    <e:AndExpr> => e,
-    <e:AndExpr> "." <d:Direction> => Box::new(Expr::Project { e, d }),
+    <e:OrExpr> => e,
+    <e:OrExpr> "." <d:Direction> => Box::new(Expr::Project { e, d }),
 };
 
 OrExpr: Box<Expr> = {

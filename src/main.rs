@@ -1,14 +1,14 @@
 mod ast;
 mod dotgen;
 mod flags;
-mod interpreter;
+mod evaluate;
 mod monad;
 mod parser;
 mod typecheck;
 
 use dotgen::to_dot;
 use flags::Verbosity;
-use interpreter::eval;
+use evaluate::eval;
 use monad::bind;
 use parser::parse;
 use std::{env::args, fmt, fs::read_to_string, io, process::exit};
@@ -66,19 +66,20 @@ fn main() {
         // read program from file
         read_to_string(input_path).map_err(Error::Io) => input,
         // parse program
-        parse(&input).map_err(|err| Error::Parse(err)) => ast,
+        parse(&input).map_err(Error::Parse) => ast,
         match mode {
             Mode::Ast => Ok(println!("{}", to_dot(&ast))),
             Mode::Interp(verbose) => do_!(
                 // type check
-                type_check(&ast).map_err(|err| Error::TypeCheck(err)) => t,
-                Ok(
+                type_check(&ast).map_err(Error::TypeCheck) => t,
+                {
                     if verbose != Verbosity::Normal {
                         println!("Type: {t:?}")
-                    }
-                ),
+                    };
+                    Ok(())
+                },
                 // evaluate
-                eval(&ast, verbose).map_err(|err| Error::Eval(err)) => expr,
+                eval(&ast, verbose).map_err(Error::Eval) => expr,
                 Ok(println!("{expr:?}"))
             ),
         }

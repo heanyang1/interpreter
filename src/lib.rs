@@ -1,6 +1,6 @@
 pub mod ast;
 pub mod flags;
-pub mod interpreter;
+pub mod evaluate;
 pub mod monad;
 pub mod typecheck;
 pub mod parser;
