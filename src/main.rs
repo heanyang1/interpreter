@@ -5,6 +5,7 @@ mod evaluate;
 mod monad;
 mod parser;
 mod typecheck;
+mod ast_util;
 
 use dotgen::to_dot;
 use flags::Verbosity;

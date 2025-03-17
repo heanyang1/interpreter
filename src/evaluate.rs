@@ -1,4 +1,4 @@
-use crate::{ast::*, flags::Verbosity};
+use crate::{ast::*, ast_util::Symbol, flags::Verbosity};
 
 pub enum Outcome {
     Step(Expr),
@@ -52,7 +52,7 @@ pub fn eval(e: &Expr, verbose: Verbosity) -> Result<Expr, String> {
     match try_step(e) {
         Ok(Outcome::Step(e_stepped)) => {
             if verbose == Verbosity::VeryVerbose {
-                println!("stepped: {e:?}|->{e_stepped:?}");
+                println!("stepped: {e:#?} |-> {e_stepped:#?}");
             }
             eval(&e_stepped, verbose)
         }
@@ -160,6 +160,18 @@ pub fn try_step(e: &Expr) -> Result<Outcome, String> {
                 _ => unreachable!("{left:?} {right:?}"),
             }
         ),
+        // 3. functions
+        Expr::App { lam, arg } => free_fall!(
+            (lam, |l| Expr::App {
+                lam: Box::new(l),
+                arg: arg.clone(),
+            }),
+            match lam.as_ref() {
+                Expr::Lam { x, e, .. } => Ok(Outcome::Step(e.substitute(x.clone(), *arg.clone()))),
+                _ => unreachable!(),
+            }
+        ),
+        Expr::Var(x) => Err(format!("Free variable: {x:?}")),
         _ => todo!(),
     }
 }

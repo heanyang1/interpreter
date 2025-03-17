@@ -18,18 +18,18 @@ LetRec: Box<Expr> = {
 };
 
 Let: Box<Expr> = {
-    <e:App> => e,
+    <e:Func> => e,
     "let" <x:Variable> ":" <tau:Type> "=" <evar:Let> "in" <ebody:Let> => Box::new(Expr::App { lam: Box::new(Expr::Lam { x, tau, e: ebody }), arg: evar }),
 };
 
-App: Box<Expr> = {
-    <e:Func> => e,
-    <lam:App> <arg:Func> => Box::new(Expr::App { lam, arg }),
+Func: Box<Expr> = {
+    <e:App> => e,
+    "fun" "(" <x:Variable> ":" <tau:Type> ")" "->" <e:Func> => Box::new(Expr::Lam { x, tau, e }),
 };
 
-Func: Box<Expr> = {
+App: Box<Expr> = {
     <e:Import> => e,
-    "fun" "(" <x:Variable> ":" <tau:Type> ")" "->" <e:Func> => Box::new(Expr::Lam { x, tau, e }),
+    <lam:App> <arg:Import> => Box::new(Expr::App { lam, arg }),
 };
 
 Import: Box<Expr> = {

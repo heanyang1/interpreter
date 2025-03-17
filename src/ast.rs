@@ -1,6 +1,18 @@
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Variable(pub String);
 
+impl From<Variable> for String {
+    fn from(value: Variable) -> Self {
+        value.0
+    }
+}
+
+impl<T> From<T> for Variable where T: ToString {
+    fn from(i: T) -> Self {
+        Self(i.to_string())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Num,
