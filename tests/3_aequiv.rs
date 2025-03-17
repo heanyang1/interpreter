@@ -86,6 +86,7 @@ mod tests {
             *parse("fun (x : num) -> 1&&x||z<0").unwrap(),
             *parse("fun (y : num) -> 1&&y||z<0").unwrap()
         ));
+
         assert!(Expr::alpha_equiv(
             parse("fun (x : num) -> if 1 && x then z < 0 || y < z else x == y")
                 .unwrap()

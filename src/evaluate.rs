@@ -172,6 +172,17 @@ pub fn try_step(e: &Expr) -> Result<Outcome, String> {
             }
         ),
         Expr::Var(x) => Err(format!("Free variable: {x:?}")),
+        // 4. product types
+        Expr::Project { e, d } => free_fall!(
+            (e, |e| Expr::Project { e: Box::new(e), d: d.clone() }),
+            match e.as_ref() {
+                Expr::Pair { left, right } => match d {
+                    Direction::Left => Ok(Outcome::Step(*left.clone())),
+                    Direction::Right => Ok(Outcome::Step(*right.clone())),
+                },
+                _ => unreachable!(),
+            }
+        ),
         _ => todo!(),
     }
 }

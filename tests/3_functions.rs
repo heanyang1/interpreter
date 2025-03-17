@@ -11,6 +11,9 @@ mod tests {
         let expr1 = parse("let f : num -> num = fun (x : num) -> x + 1 in f 2").unwrap();
         assert_eq!(eval(&expr1, Verbosity::Normal).unwrap(), Expr::Num(3));
         assert_eq!(type_check(&expr1).unwrap(), Type::Num);
+        let expr2 = parse("(fun (x : num) -> x) 2").unwrap();
+        assert_eq!(eval(&expr2, Verbosity::Normal).unwrap(), Expr::Num(2));
+        assert_eq!(type_check(&expr2).unwrap(), Type::Num);
     }
 
     #[test]

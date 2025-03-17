@@ -82,6 +82,21 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<String, Type>) -> Result<Type, Strin
                 _ => Err(format!("Function application has incompatible argument types: {:?} {:?}", tau_lam, tau_arg)),
             }
         ),
-        _ => todo!(),
+        // 4. Product types
+        Expr::Pair { left, right } => do_!(
+            type_check_expr(left, ctx.clone()) => tau_left,
+            type_check_expr(right, ctx) => tau_right,
+            Ok(Type::Product { left: Box::new(tau_left), right: Box::new(tau_right) })
+        ),
+        Expr::Project { e, d } => do_!(
+            type_check_expr(e, ctx) => tau_e,
+            match (tau_e.clone(), d) {
+                (Type::Product { left, .. }, Direction::Left) => Ok(*left),
+                (Type::Product { right, .. }, Direction::Right) => Ok(*right),
+                _ => Err(format!("Projection has incompatible types: {:?} {:?}", tau_e, d)),
+            }
+        ),
+        Expr::Unit => Ok(Type::Unit),
+        _ => todo!("type_check_expr({:?})", ast),
     }
 }
