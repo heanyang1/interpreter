@@ -1,15 +1,15 @@
 mod ast;
+mod ast_util;
 mod dotgen;
-mod flags;
 mod evaluate;
+mod flags;
 mod monad;
 mod parser;
 mod typecheck;
-mod ast_util;
 
 use dotgen::to_dot;
-use flags::Verbosity;
 use evaluate::eval;
+use flags::Verbosity;
 use monad::bind;
 use parser::parse;
 use std::{env::args, fmt, fs::read_to_string, io, process::exit};
@@ -20,7 +20,6 @@ enum Error {
     InvalidArgs,
     Parse(String),
     TypeCheck(String),
-    Eval(String),
     Io(io::Error),
 }
 
@@ -30,7 +29,6 @@ impl fmt::Display for Error {
             Self::InvalidArgs => write!(f, "Usage: interpreter <input> [-a | -v | -vv]"),
             Self::Parse(s) => write!(f, "Parse error: {s}"),
             Self::TypeCheck(s) => write!(f, "Type error: {s}"),
-            Self::Eval(s) => write!(f, "Value error: {s}"),
             Self::Io(err) => write!(f, "I/O error: {err}"),
         }
     }
@@ -80,8 +78,7 @@ fn main() {
                     Ok(())
                 },
                 // evaluate
-                eval(&ast, verbose).map_err(Error::Eval) => expr,
-                Ok(println!("{expr:?}"))
+                Ok(println!("{:?}", eval(&ast, verbose)))
             ),
         }
     ) {

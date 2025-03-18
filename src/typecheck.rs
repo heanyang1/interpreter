@@ -6,7 +6,7 @@ pub fn type_check(ast: &Expr) -> Result<Type, String> {
     type_check_expr(ast, HashMap::new())
 }
 
-fn type_check_expr(ast: &Expr, ctx: HashMap<String, Type>) -> Result<Type, String> {
+fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, String> {
     match ast {
         // 1. arithmetic
         Expr::Num(_) => Ok(Type::Num),
@@ -61,15 +61,15 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<String, Type>) -> Result<Type, Strin
                 _ => Err(format!("Or operands have incompatible types: {:?} || {:?}", tau_left, tau_right)),
             }
         ),
-        // 3. Functions
-        Expr::Var(x) => match ctx.get(&x.0) {
+        // 3. functions
+        Expr::Var(x) => match ctx.get(x) {
             Some(tau) => Ok(tau.clone()),
             None => Err(format!("Free variable: {}", x.0)),
         },
         Expr::Lam { x, tau, e } => do_!(
             {
                 let mut ctx = ctx;
-                ctx.insert(x.0.clone(), *tau.clone());
+                ctx.insert(x.clone(), *tau.clone());
                 type_check_expr(e, ctx.clone())
             } => tau_e,
             Ok(Type::Fn { arg: tau.clone(), ret:  Box::new(tau_e) })
@@ -82,7 +82,7 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<String, Type>) -> Result<Type, Strin
                 _ => Err(format!("Function application has incompatible argument types: {:?} {:?}", tau_lam, tau_arg)),
             }
         ),
-        // 4. Product types
+        // 4. product types
         Expr::Pair { left, right } => do_!(
             type_check_expr(left, ctx.clone()) => tau_left,
             type_check_expr(right, ctx) => tau_right,
@@ -93,10 +93,47 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<String, Type>) -> Result<Type, Strin
             match (tau_e.clone(), d) {
                 (Type::Product { left, .. }, Direction::Left) => Ok(*left),
                 (Type::Product { right, .. }, Direction::Right) => Ok(*right),
-                _ => Err(format!("Projection has incompatible types: {:?} {:?}", tau_e, d)),
+                _ => Err(format!("Project has incompatible types: {:?}.{:?}", tau_e, d)),
             }
         ),
         Expr::Unit => Ok(Type::Unit),
+        // 5. sum types
+        Expr::Inject { e, d, tau } => do_!(
+            type_check_expr(e, ctx) => tau_e,
+            match (d, tau.as_ref()) {
+                (Direction::Left, Type::Sum { left, .. }) if tau_e == **left => Ok(*tau.clone()),
+                (Direction::Right, Type::Sum { right, .. }) if tau_e == **right => Ok(*tau.clone()),
+                _ => Err(format!("Inject has incompatible types: inj {:?} = {:?} as {:?}", tau_e, d, tau)),
+            }
+        ),
+        Expr::Case {
+            e,
+            xleft,
+            eleft,
+            xright,
+            eright,
+        } => do_!(
+            type_check_expr(e, ctx.clone()) => tau_e,
+            match tau_e {
+                Type::Sum { left, right } => Ok((*left, *right)),
+                _ => Err(format!("Case expression should be a sum type; found {:?}", tau_e)),
+            } => (tau_xleft, tau_xright),
+            {
+                let mut ctx = ctx.clone();
+                ctx.insert(xleft.clone(), tau_xleft);
+                type_check_expr(eleft, ctx)
+            } => tau_eleft,
+            {
+                let mut ctx = ctx;
+                ctx.insert(xright.clone(), tau_xright);
+                type_check_expr(eright, ctx)
+            } => tau_eright,
+            if tau_eleft == tau_eright {
+                Ok(tau_eleft)
+            } else {
+                Err(format!("Case branches have incompatible types: {:?} and {:?}", tau_eleft, tau_eright))
+            }
+        ),
         _ => todo!("type_check_expr({:?})", ast),
     }
 }

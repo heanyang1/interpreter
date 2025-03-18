@@ -69,12 +69,12 @@ If: Box<Expr> = {
 
 Case: Box<Expr> = {
     <e:Inject> => e,
-    "case" <e:Inject> "{" "left" "(" <xleft:Variable> ")" "->" <eleft:Inject> "|" "right" "(" <xright:Variable> ")" "->" <eright:Inject> "}" => Box::new(Expr::Case { e, xleft, eleft, xright, eright }),
+    "case" <e:Inject> "{" "L" "(" <xleft:Variable> ")" "->" <eleft:Inject> "|" "R" "(" <xright:Variable> ")" "->" <eright:Inject> "}" => Box::new(Expr::Case { e, xleft, eleft, xright, eright }),
 };
 
 Inject: Box<Expr> = {
     <e:Project> => e,
-    "inject" <e:Project> "=" <d:Direction> "as" <tau:Type> => Box::new(Expr::Inject { e, d, tau }),
+    "inj" <e:Project> "=" <d:Direction> "as" <tau:Type> => Box::new(Expr::Inject { e, d, tau }),
 };
 
 Project: Box<Expr> = {

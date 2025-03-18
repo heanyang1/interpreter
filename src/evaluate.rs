@@ -8,12 +8,11 @@ pub enum Outcome {
 /// The `|->` operator
 fn fall_through(
     (e, hole): (&Expr, impl FnOnce(Expr) -> Expr),
-    next: impl FnOnce() -> Result<Outcome, String>,
-) -> Result<Outcome, String> {
+    next: impl FnOnce() -> Outcome,
+) -> Outcome {
     match try_step(e) {
-        Ok(Outcome::Step(next_e)) => Ok(Outcome::Step(hole(next_e))),
-        Ok(Outcome::Value) => next(),
-        Err(e) => Err(e),
+        Outcome::Step(next_e) => Outcome::Step(hole(next_e)),
+        Outcome::Value => next(),
     }
 }
 
@@ -48,20 +47,19 @@ macro_rules! eval_right {
     };
 }
 
-pub fn eval(e: &Expr, verbose: Verbosity) -> Result<Expr, String> {
+pub fn eval(e: &Expr, verbose: Verbosity) -> Expr {
     match try_step(e) {
-        Ok(Outcome::Step(e_stepped)) => {
+        Outcome::Step(e_stepped) => {
             if verbose == Verbosity::VeryVerbose {
                 println!("stepped: {e:#?} |-> {e_stepped:#?}");
             }
             eval(&e_stepped, verbose)
         }
-        Ok(Outcome::Value) => Ok(e.clone()),
-        Err(e) => Err(e),
+        Outcome::Value => e.clone()
     }
 }
 
-pub fn try_step(e: &Expr) -> Result<Outcome, String> {
+pub fn try_step(e: &Expr) -> Outcome {
     match e {
         Expr::Lam { .. }
         | Expr::Num { .. }
@@ -72,16 +70,16 @@ pub fn try_step(e: &Expr) -> Result<Outcome, String> {
         | Expr::Inject { .. }
         | Expr::TyLam { .. }
         | Expr::Export { .. }
-        | Expr::Fold { .. } => Ok(Outcome::Value),
+        | Expr::Fold { .. } => Outcome::Value,
         // 1. arithmetic
         Expr::Addop { binop, left, right } => free_fall!(
             eval_left!(binop, left, right, Addop),
             eval_right!(binop, left, right, Addop),
             if let (Expr::Num(l), Expr::Num(r)) = (left.as_ref(), right.as_ref()) {
-                Ok(match binop {
+                match binop {
                     AddOp::Add => Outcome::Step(Expr::Num(l + r)),
                     AddOp::Sub => Outcome::Step(Expr::Num(l - r)),
-                })
+                }
             } else {
                 unreachable!()
             }
@@ -91,8 +89,8 @@ pub fn try_step(e: &Expr) -> Result<Outcome, String> {
             eval_right!(binop, left, right, Mulop),
             if let (Expr::Num(l), Expr::Num(r)) = (left.as_ref(), right.as_ref()) {
                 match binop {
-                    MulOp::Mul => Ok(Outcome::Step(Expr::Num(l * r))),
-                    MulOp::Div => Ok(Outcome::Step(Expr::Num(l / r))),
+                    MulOp::Mul => Outcome::Step(Expr::Num(l * r)),
+                    MulOp::Div => Outcome::Step(Expr::Num(l / r)),
                 }
             } else {
                 unreachable!()
@@ -106,8 +104,8 @@ pub fn try_step(e: &Expr) -> Result<Outcome, String> {
                 else_: else_.clone(),
             }),
             match cond.as_ref() {
-                Expr::True => Ok(Outcome::Step(*then_.clone())),
-                Expr::False => Ok(Outcome::Step(*else_.clone())),
+                Expr::True => Outcome::Step(*then_.clone()),
+                Expr::False => Outcome::Step(*else_.clone()),
                 _ => unreachable!(),
             }
         ),
@@ -121,8 +119,8 @@ pub fn try_step(e: &Expr) -> Result<Outcome, String> {
                     RelOp::Eq => l == r,
                 };
                 match result {
-                    true => Ok(Outcome::Step(Expr::True)),
-                    false => Ok(Outcome::Step(Expr::False)),
+                    true => Outcome::Step(Expr::True),
+                    false => Outcome::Step(Expr::False),
                 }
             } else {
                 unreachable!()
@@ -138,9 +136,9 @@ pub fn try_step(e: &Expr) -> Result<Outcome, String> {
                 right: Box::new(r),
             }),
             match (left.as_ref(), right.as_ref()) {
-                (Expr::True, Expr::True) => Ok(Outcome::Step(Expr::True)),
-                (Expr::False, _) => Ok(Outcome::Step(Expr::False)),
-                (Expr::True, Expr::False) => Ok(Outcome::Step(Expr::False)),
+                (Expr::True, Expr::True) => Outcome::Step(Expr::True),
+                (Expr::False, _) => Outcome::Step(Expr::False),
+                (Expr::True, Expr::False) => Outcome::Step(Expr::False),
                 _ => unreachable!("{left:?} {right:?}"),
             }
         ),
@@ -154,9 +152,9 @@ pub fn try_step(e: &Expr) -> Result<Outcome, String> {
                 right: Box::new(r),
             }),
             match (left.as_ref(), right.as_ref()) {
-                (Expr::False, Expr::False) => Ok(Outcome::Step(Expr::False)),
-                (Expr::True, _) => Ok(Outcome::Step(Expr::True)),
-                (Expr::False, Expr::True) => Ok(Outcome::Step(Expr::True)),
+                (Expr::False, Expr::False) => Outcome::Step(Expr::False),
+                (Expr::True, _) => Outcome::Step(Expr::True),
+                (Expr::False, Expr::True) => Outcome::Step(Expr::True),
                 _ => unreachable!("{left:?} {right:?}"),
             }
         ),
@@ -167,22 +165,40 @@ pub fn try_step(e: &Expr) -> Result<Outcome, String> {
                 arg: arg.clone(),
             }),
             match lam.as_ref() {
-                Expr::Lam { x, e, .. } => Ok(Outcome::Step(e.substitute(x.clone(), *arg.clone()))),
+                Expr::Lam { x, e, .. } => Outcome::Step(e.substitute(x.clone(), *arg.clone())),
                 _ => unreachable!(),
             }
         ),
-        Expr::Var(x) => Err(format!("Free variable: {x:?}")),
+        Expr::Var(x) => unreachable!("Free variable {x:?} should be found in type checking"),
         // 4. product types
         Expr::Project { e, d } => free_fall!(
             (e, |e| Expr::Project { e: Box::new(e), d: d.clone() }),
             match e.as_ref() {
                 Expr::Pair { left, right } => match d {
-                    Direction::Left => Ok(Outcome::Step(*left.clone())),
-                    Direction::Right => Ok(Outcome::Step(*right.clone())),
+                    Direction::Left => Outcome::Step(*left.clone()),
+                    Direction::Right => Outcome::Step(*right.clone()),
                 },
                 _ => unreachable!(),
             }
         ),
+        // 5. sum types
+        Expr::Case { e, xleft, eleft, xright, eright } => {
+            free_fall!(
+            (e, |e| Expr::Case {
+                e: Box::new(e),
+                xleft: xleft.clone(),
+                eleft: eleft.clone(),
+                xright: xright.clone(),
+                eright: eright.clone(),
+            }),
+            match e.as_ref() {
+                Expr::Inject { e, d, .. } => match d {
+                    Direction::Left => Outcome::Step(eleft.substitute(xleft.clone(), *e.clone())),
+                    Direction::Right => Outcome::Step(eright.substitute(xright.clone(), *e.clone())),
+                },
+                _ => unreachable!(),
+            }
+        )},
         _ => todo!(),
     }
 }

@@ -10,17 +10,17 @@ mod tests {
     #[test]
     fn eval_test() {
         let expr1 = parse("(1+2,3-4).L").unwrap();
-        assert_eq!(eval(&expr1, Verbosity::Normal).unwrap(), Expr::Num(3));
+        assert_eq!(eval(&expr1, Verbosity::Normal), Expr::Num(3));
         assert_eq!(type_check(&expr1).unwrap(), Type::Num);
         let expr2 = parse("(1*2,3/4).R").unwrap();
-        assert_eq!(eval(&expr2, Verbosity::Normal).unwrap(), Expr::Num(0));
+        assert_eq!(eval(&expr2, Verbosity::Normal), Expr::Num(0));
         assert_eq!(type_check(&expr2).unwrap(), Type::Num);
         let expr3 = parse("((1+2,3-4).L,(1*2,3/4).R).L").unwrap();
-        assert_eq!(eval(&expr3, Verbosity::Normal).unwrap(), Expr::Num(3));
+        assert_eq!(eval(&expr3, Verbosity::Normal), Expr::Num(3));
         assert_eq!(type_check(&expr3).unwrap(), Type::Num);
         let expr4 = parse("(((),(1,2)),())").unwrap();
         assert_eq!(
-            eval(&expr4, Verbosity::Normal).unwrap(),
+            eval(&expr4, Verbosity::Normal),
             Expr::Pair {
                 left: Box::new(Expr::Pair {
                     left: Box::new(Expr::Unit),

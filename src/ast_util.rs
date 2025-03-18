@@ -6,6 +6,23 @@ fn fresh(v: &Variable) -> Variable {
     Variable::from(format!("{}_", v.0))
 }
 
+macro_rules! trivial {
+    ($namespace:tt, $ty:tt, $rename:ident; $($prefix:ident),*; $($i:ident),+; $($suffix:ident),*) => {
+        $namespace::$ty {
+            $($prefix,)*
+            // TODO: remove the extra clone for the last element
+            $($i: Box::new(aux($rename.clone(), *$i)),)+
+            $($suffix,)*
+        }
+    };
+
+    ($($term1:ident == $term2:ident),*; $($nonterm1:ident == $nonterm2:ident),*) => {
+        $($term1 == $term2 &&)*
+        $(aux(*$nonterm1, *$nonterm2) &&)*
+        true
+    }
+}
+
 pub trait Symbol {
     fn to_debruijn(&self) -> Self;
     #[allow(unused)]
@@ -17,7 +34,12 @@ impl Symbol for Type {
     fn to_debruijn(&self) -> Self {
         fn aux(_depth: HashMap<String, u32>, t: Type) -> Type {
             match t {
-                Type::Num | Type::Bool | Type::Unit | Type::Fn { .. } | Type::Product { .. } => t,
+                Type::Num
+                | Type::Bool
+                | Type::Unit
+                | Type::Fn { .. }
+                | Type::Product { .. }
+                | Type::Sum { .. } => t,
                 _ => todo!(),
             }
         }
@@ -30,10 +52,8 @@ impl Symbol for Type {
                 (Type::Num, Type::Num) | (Type::Bool, Type::Bool) | (Type::Unit, Type::Unit) => {
                     true
                 }
-                (Type::Fn { arg: a1, ret: r1 }, Type::Fn { arg: a2, ret: r2 }) => {
-                    aux(*a1, *a2) && aux(*r1, *r2)
-                }
-                (
+                (Type::Fn { arg: l1, ret: r1 }, Type::Fn { arg: l2, ret: r2 })
+                | (
                     Type::Product {
                         left: l1,
                         right: r1,
@@ -42,7 +62,17 @@ impl Symbol for Type {
                         left: l2,
                         right: r2,
                     },
-                ) => aux(*l1, *l2) && aux(*r1, *r2),
+                )
+                | (
+                    Type::Sum {
+                        left: l1,
+                        right: r1,
+                    },
+                    Type::Sum {
+                        left: l2,
+                        right: r2,
+                    },
+                ) => trivial!(; l1==l2, r1==r2),
                 _ => false,
             }
         }
@@ -53,38 +83,14 @@ impl Symbol for Type {
         fn aux(rename: HashMap<Variable, Type>, this: Type) -> Type {
             match this {
                 Type::Num | Type::Bool | Type::Unit => this,
-                Type::Fn { arg, ret } => Type::Fn {
-                    arg: Box::new(aux(rename.clone(), *arg)),
-                    ret: Box::new(aux(rename.clone(), *ret)),
-                },
-                Type::Product { left, right } => Type::Product {
-                    left: Box::new(aux(rename.clone(), *left)),
-                    right: Box::new(aux(rename, *right)),
-                },
+                Type::Fn { arg, ret } => trivial!(Type, Fn, rename;; arg, ret;),
+                Type::Product { left, right } => trivial!(Type, Product, rename;; left, right;),
+                Type::Sum { left, right } => trivial!(Type, Sum, rename;; left, right;),
                 _ => todo!(),
             }
         }
         aux(HashMap::new(), self.clone())
     }
-}
-
-macro_rules! bin_subs {
-    ($ty:tt, $binop:ident, $left:ident, $right:ident, $rename:ident) => {
-        Expr::$ty {
-            $binop,
-            $left: Box::new(aux($rename.clone(), *$left)),
-            $right: Box::new(aux($rename, *$right)),
-        }
-    };
-}
-
-macro_rules! bin_subs_noop {
-    ($ty:tt, $left:ident, $right:ident, $rename:ident) => {
-        Expr::$ty {
-            $left: Box::new(aux($rename.clone(), *$left)),
-            $right: Box::new(aux($rename, *$right)),
-        }
-    };
 }
 
 impl Symbol for Expr {
@@ -112,40 +118,45 @@ impl Symbol for Expr {
                         e: Box::new(aux(depth, *e)),
                     }
                 }
-                Expr::App { lam, arg } => Expr::App {
-                    lam: Box::new(aux(depth.clone(), *lam)),
-                    arg: Box::new(aux(depth, *arg)),
-                },
+                Expr::App { lam, arg } => trivial!(Expr, App, depth;; lam, arg;),
                 Expr::Addop { binop, left, right } => {
-                    bin_subs!(Addop, binop, left, right, depth)
+                    trivial!(Expr, Addop, depth; binop; left, right;)
                 }
                 Expr::Mulop { binop, left, right } => {
-                    bin_subs!(Mulop, binop, left, right, depth)
+                    trivial!(Expr, Mulop, depth; binop; left, right;)
                 }
                 Expr::Relop { relop, left, right } => {
-                    bin_subs!(Relop, relop, left, right, depth)
+                    trivial!(Expr, Relop, depth; relop; left, right;)
                 }
-                Expr::If { cond, then_, else_ } => Expr::If {
-                    cond: Box::new(aux(depth.clone(), *cond)),
-                    then_: Box::new(aux(depth.clone(), *then_)),
-                    else_: Box::new(aux(depth, *else_)),
-                },
-                Expr::And { left, right } => Expr::And {
-                    left: Box::new(aux(depth.clone(), *left)),
-                    right: Box::new(aux(depth, *right)),
-                },
-                Expr::Or { left, right } => Expr::Or {
-                    left: Box::new(aux(depth.clone(), *left)),
-                    right: Box::new(aux(depth, *right)),
-                },
-                Expr::Pair { left, right } => Expr::Pair {
-                    left: Box::new(aux(depth.clone(), *left)),
-                    right: Box::new(aux(depth, *right)),
-                },
-                Expr::Project { e, d } => Expr::Project {
-                    e: Box::new(aux(depth, *e)),
-                    d,
-                },
+                Expr::If { cond, then_, else_ } => trivial!(Expr, If, depth;; cond, then_, else_;),
+                Expr::And { left, right } => trivial!(Expr, And, depth;; left, right;),
+                Expr::Or { left, right } => trivial!(Expr, Or, depth;; left, right;),
+                Expr::Pair { left, right } => trivial!(Expr, Pair, depth;; left, right;),
+                Expr::Project { e, d } => trivial!(Expr, Project, depth;; e; d),
+                Expr::Inject { e, d, tau } => trivial!(Expr, Inject, depth;; e; d, tau),
+                Expr::Case {
+                    e,
+                    xleft,
+                    eleft,
+                    xright,
+                    eright,
+                } => {
+                    let mut depth_new = depth.clone();
+                    for (_, v) in depth_new.iter_mut() {
+                        *v += 1;
+                    }
+                    depth_new.extend([
+                        (String::from(xleft.clone()).to_string(), 0),
+                        (String::from(xright.clone()).to_string(), 0),
+                    ]);
+                    Expr::Case {
+                        e: Box::new(aux(depth, *e)),
+                        xleft: Variable::from("_"),
+                        eleft: Box::new(aux(depth_new.clone(), *eleft)),
+                        xright: Variable::from("_"),
+                        eright: Box::new(aux(depth_new, *eright)),
+                    }
+                }
                 _ => todo!("to_debruijn: {e:?}"),
             }
         }
@@ -168,7 +179,7 @@ impl Symbol for Expr {
                         left: l2,
                         right: r2,
                     },
-                ) => b1 == b2 && aux(*l1, *l2) && aux(*r1, *r2),
+                ) => trivial!(b1 == b2; l1 == l2, r1 == r2),
                 (
                     Expr::Mulop {
                         binop: b1,
@@ -180,7 +191,7 @@ impl Symbol for Expr {
                         left: l2,
                         right: r2,
                     },
-                ) => b1 == b2 && aux(*l1, *l2) && aux(*r1, *r2),
+                ) => trivial!(b1 == b2; l1 == l2, r1 == r2),
                 (
                     Expr::If {
                         cond: c1,
@@ -192,7 +203,7 @@ impl Symbol for Expr {
                         then_: t2,
                         else_: e2,
                     },
-                ) => aux(*c1, *c2) && aux(*t1, *t2) && aux(*e1, *e2),
+                ) => trivial!(;c1 == c2, t1 == t2, e1 == e2),
                 (
                     Expr::Relop {
                         relop: b1,
@@ -204,7 +215,7 @@ impl Symbol for Expr {
                         left: l2,
                         right: r2,
                     },
-                ) => b1 == b2 && aux(*l1, *l2) && aux(*r1, *r2),
+                ) => trivial!(b1 == b2; l1 == l2, r1 == r2),
                 (
                     Expr::And {
                         left: l1,
@@ -236,11 +247,39 @@ impl Symbol for Expr {
                     },
                 )
                 | (Expr::App { lam: l1, arg: r1 }, Expr::App { lam: l2, arg: r2 }) => {
-                    aux(*l1, *l2) && aux(*r1, *r2)
+                    trivial!(; l1 == l2, r1 == r2)
                 }
                 (Expr::Project { e: e1, d: d1 }, Expr::Project { e: e2, d: d2 }) => {
-                    d1 == d2 && aux(*e1, *e2)
+                    trivial!(d1 == d2; e1 == e2)
                 }
+                (
+                    Expr::Inject {
+                        e: e1,
+                        d: d1,
+                        tau: t1,
+                    },
+                    Expr::Inject {
+                        e: e2,
+                        d: d2,
+                        tau: t2,
+                    },
+                ) => trivial!(d1 == d2, t1 == t2; e1 == e2),
+                (
+                    Expr::Case {
+                        e: e1,
+                        xleft: xl1,
+                        eleft: el1,
+                        xright: xr1,
+                        eright: er1,
+                    },
+                    Expr::Case {
+                        e: e2,
+                        xleft: xl2,
+                        eleft: el2,
+                        xright: xr2,
+                        eright: er2,
+                    },
+                ) => trivial!(xl1 == xl2, xr1 == xr2; e1 == e2, el1 == el2, er1 == er2),
                 (Expr::Lam { e: e1, .. }, Expr::Lam { e: e2, .. }) => aux(*e1, *e2),
                 (Expr::True, Expr::True)
                 | (Expr::False, Expr::False)
@@ -254,16 +293,20 @@ impl Symbol for Expr {
         fn aux(rename: HashMap<Variable, Expr>, this: Expr) -> Expr {
             match this {
                 Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => this.clone(),
-                Expr::Addop { binop, left, right } => bin_subs!(Addop, binop, left, right, rename),
-                Expr::Mulop { binop, left, right } => bin_subs!(Mulop, binop, left, right, rename),
-                Expr::If { cond, then_, else_ } => Expr::If {
-                    cond: Box::new(aux(rename.clone(), *cond)),
-                    then_: Box::new(aux(rename.clone(), *then_)),
-                    else_: Box::new(aux(rename.clone(), *else_)),
-                },
-                Expr::Relop { relop, left, right } => bin_subs!(Relop, relop, left, right, rename),
-                Expr::And { left, right } => bin_subs_noop!(And, left, right, rename),
-                Expr::Or { left, right } => bin_subs_noop!(Or, left, right, rename),
+                Expr::Addop { binop, left, right } => {
+                    trivial!(Expr, Addop, rename; binop; left, right;)
+                }
+                Expr::Mulop { binop, left, right } => {
+                    trivial!(Expr, Mulop, rename; binop; left, right;)
+                }
+                Expr::If { cond, then_, else_ } => {
+                    trivial!(Expr, If, rename;; cond, then_, else_;)
+                }
+                Expr::Relop { relop, left, right } => {
+                    trivial!(Expr, Relop, rename; relop; left, right;)
+                }
+                Expr::And { left, right } => trivial!(Expr, And, rename;; left, right;),
+                Expr::Or { left, right } => trivial!(Expr, Or, rename;; left, right;),
                 Expr::Lam { x, tau, e } => {
                     let mut rename = rename;
                     let new_x = fresh(&x);
@@ -274,16 +317,42 @@ impl Symbol for Expr {
                         e: Box::new(aux(rename, *e)),
                     }
                 }
-                Expr::App { lam, arg } => bin_subs_noop!(App, lam, arg, rename),
+                Expr::App { lam, arg } => trivial!(Expr, App, rename;; lam, arg;),
                 Expr::Var(v) => match rename.get(&v.clone()) {
                     Some(val) => val.clone(),
                     None => Expr::Var(v),
                 },
-                Expr::Pair { left, right } => bin_subs_noop!(Pair, left, right, rename),
-                Expr::Project { e, d } => Expr::Project {
-                    e: Box::new(aux(rename.clone(), *e)),
-                    d,
-                },
+                Expr::Pair { left, right } => trivial!(Expr, Pair, rename;; left, right;),
+                Expr::Project { e, d } => trivial!(Expr, Project, rename;; e; d),
+                Expr::Inject { e, d, tau } => trivial!(Expr, Inject, rename;; e; d, tau),
+                Expr::Case {
+                    e,
+                    xleft,
+                    eleft,
+                    xright,
+                    eright,
+                } => {
+                    let mut rename = rename.clone();
+                    let new_xleft = match rename.get(&xleft) {
+                        Some(Expr::Var(v)) => v.clone(),
+                        _ => fresh(&xleft),
+                    };
+                    let new_xright = match rename.get(&xright) {
+                        Some(Expr::Var(v)) => v.clone(),
+                        _ => fresh(&xright),
+                    };
+                    rename.extend([
+                        (xleft.clone(), Expr::Var(new_xleft.clone())),
+                        (xright.clone(), Expr::Var(new_xright.clone())),
+                    ]);
+                    Expr::Case {
+                        e: Box::new(aux(rename.clone(), *e)),
+                        xleft: new_xleft,
+                        eleft: Box::new(aux(rename.clone(), *eleft)),
+                        xright: new_xright,
+                        eright: Box::new(aux(rename, *eright)),
+                    }
+                }
                 _ => todo!(),
             }
         }
