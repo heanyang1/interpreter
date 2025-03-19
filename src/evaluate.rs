@@ -165,7 +165,8 @@ pub fn try_step(expr: &Expr) -> Outcome {
                 arg: arg.clone(),
             }),
             match lam.as_ref() {
-                Expr::Lam { x, e, .. } => Outcome::Step(e.substitute(x.clone(), *arg.clone())),
+                Expr::Lam { x, e, .. } =>
+                    Outcome::Step(e.clone().substitute(x.clone(), *arg.clone())),
                 _ => unreachable!(),
             }
         ),
@@ -203,16 +204,27 @@ pub fn try_step(expr: &Expr) -> Outcome {
                 match e.as_ref() {
                     Expr::Inject { e, d, .. } => match d {
                         Direction::Left =>
-                            Outcome::Step(eleft.substitute(xleft.clone(), *e.clone())),
+                            Outcome::Step(eleft.clone().substitute(xleft.clone(), *e.clone())),
                         Direction::Right =>
-                            Outcome::Step(eright.substitute(xright.clone(), *e.clone())),
+                            Outcome::Step(eright.clone().substitute(xright.clone(), *e.clone())),
                     },
                     _ => unreachable!(),
                 }
             )
         }
         // 6. fixpoints
-        Expr::Fix { x, e, .. } => Outcome::Step(e.substitute(x.clone(), expr.clone())),
+        Expr::Fix { x, e, .. } => Outcome::Step(e.clone().substitute(x.clone(), expr.clone())),
+        // 7. polymorphism
+        Expr::TyApp { e, tau } => free_fall!(
+            (e, |e| Expr::TyApp {
+                e: Box::new(e),
+                tau: tau.clone(),
+            }),
+            match e.as_ref() {
+                Expr::TyLam { e, .. } => Outcome::Step(*e.clone()),
+                _ => unreachable!(),
+            }
+        ),
         _ => todo!(),
     }
 }

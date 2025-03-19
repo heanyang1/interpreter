@@ -34,7 +34,7 @@ mod tests {
         )
         .unwrap();
         assert!(Expr::alpha_equiv(
-            fact.substitute(Variable::from("n"), Expr::Var("t".into())),
+            fact.clone().substitute(Variable::from("n"), Expr::Var("t".into())),
             *fact
         ));
     }

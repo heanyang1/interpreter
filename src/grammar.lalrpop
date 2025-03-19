@@ -18,8 +18,13 @@ LetRec: Box<Expr> = {
 };
 
 Let: Box<Expr> = {
-    <e:Func> => e,
+    <e:TyLam> => e,
     "let" <x:Variable> ":" <tau:Type> "=" <evar:Let> "in" <ebody:Let> => Box::new(Expr::App { lam: Box::new(Expr::Lam { x, tau, e: ebody }), arg: evar }),
+};
+
+TyLam: Box<Expr> = {
+    <e:Func> => e,
+    "tyfun" <a:Variable> "->" <e:TyLam> => Box::new(Expr::TyLam { a, e }),
 };
 
 Func: Box<Expr> = {
@@ -28,8 +33,13 @@ Func: Box<Expr> = {
 };
 
 App: Box<Expr> = {
+    <e:TyApp> => e,
+    <lam:App> <arg:TyApp> => Box::new(Expr::App { lam, arg }),
+};
+
+TyApp: Box<Expr> = {
     <e:Import> => e,
-    <lam:App> <arg:Import> => Box::new(Expr::App { lam, arg }),
+    <e:TyApp> "[" <tau:Type> "]" => Box::new(Expr::TyApp { e, tau }),
 };
 
 Import: Box<Expr> = {
@@ -48,18 +58,8 @@ UnFold: Box<Expr> = {
 };
 
 Fold: Box<Expr> = {
-    <e:TyApp> => e,
-    "fold" <e:TyApp> "as" <tau:Type> => Box::new(Expr::Fold { e, tau }),
-};
-
-TyApp: Box<Expr> = {
-    <e:TyLam> => e,
-    <e:TyLam> "[" <tau:Type> "]" => Box::new(Expr::TyApp { e, tau }),
-}
-
-TyLam: Box<Expr> = {
     <e:If> => e,
-    "tyfun" <a:Variable> "->" <e:If> => Box::new(Expr::TyLam { a, e }),
+    "fold" <e:If> "as" <tau:Type> => Box::new(Expr::Fold { e, tau }),
 };
 
 If: Box<Expr> = {
@@ -139,7 +139,7 @@ Direction: Direction = {
     "R" => Direction::Right,
 };
 
-Type: Box<Type> = {
+pub Type: Box<Type> = {
     "rec" <a:Variable> "." <tau:Type> => Box::new(Type::Rec { a, tau }),
     "forall" <a:Variable> "." <tau:Type> => Box::new(Type::Forall { a, tau }),
     "exists" <a:Variable> "." <tau:Type> => Box::new(Type::Exists { a, tau }),

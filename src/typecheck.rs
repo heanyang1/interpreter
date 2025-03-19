@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{ast::*, do_, monad::bind};
+use crate::{ast::*, ast_util::Symbol, do_, monad::bind};
 
 pub fn type_check(ast: &Expr) -> Result<Type, String> {
     type_check_expr(ast, HashMap::new())
@@ -145,6 +145,18 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
                 Ok(tau_e)
             } else {
                 Err(format!("Fixpoint type mismatch: {:?} and {:?}", tau_e, tau))
+            }
+        ),
+        // 7. polymorphism
+        Expr::TyLam { a, e } => do_!(
+            type_check_expr(e, ctx) => tau_e,
+            Ok(Type::Forall { a: a.clone(), tau: Box::new(tau_e) })
+        ),
+        Expr::TyApp { e, tau: tau_arg } => do_!(
+            type_check_expr(e, ctx) => tau_e,
+            match tau_e {
+                Type::Forall { a, tau: tau_body } => Ok(tau_body.substitute(a, *tau_arg.clone())),
+                _ => Err(format!("Type application has incompatible types: {:?} [{:?}]", tau_e, tau_arg)),
             }
         ),
         _ => todo!("type_check_expr({:?})", ast),

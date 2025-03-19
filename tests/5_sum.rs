@@ -43,11 +43,11 @@ mod tests {
     fn aequiv() {
         let expr1 = parse("case (inj 1=L as num+num) {L(l)->l+1|R(r)->3*r}").unwrap();
         assert!(Expr::alpha_equiv(
-            expr1.substitute(Variable::from("l"), Expr::Var("n".into())),
+            expr1.clone().substitute(Variable::from("l"), Expr::Var("n".into())),
             *parse("case (inj 1=L as num+num) {L(n)->n+1|R(r_)->3*r_}").unwrap()
         ));
         assert!(Expr::alpha_equiv(
-            expr1.substitute(Variable::from("r"), Expr::Var("n".into())),
+            expr1.clone().substitute(Variable::from("r"), Expr::Var("n".into())),
             *parse("case (inj 1=L as num+num) {L(l_)->n+1|R(n)->3*n}").unwrap()
         ));
 
@@ -63,7 +63,7 @@ mod tests {
         )
         .unwrap();
         assert!(Expr::alpha_equiv(
-            expr3.substitute(Variable::from("n"), Expr::Var("t".into())),
+            expr3.clone().substitute(Variable::from("n"), Expr::Var("t".into())),
             *expr3
         ));
     }

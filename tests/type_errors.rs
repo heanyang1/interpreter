@@ -60,4 +60,11 @@ mod tests {
         let fix = parse("letrec f : num = 5 in f 1").unwrap();
         assert!(type_check(&fix).is_err());
     }
+
+    #[test]
+    fn polymorphism() {
+        let poly = parse("10 [num] 100")
+        .unwrap();
+        assert!(type_check(&poly).is_err());
+    }
 }

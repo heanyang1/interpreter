@@ -51,11 +51,11 @@ mod tests {
     fn aequiv() {
         let expr1 = parse("(((),(x,2)),(y,x)).L").unwrap();
         assert!(Expr::alpha_equiv(
-            expr1.substitute(Variable::from("x"), Expr::Num(0)),
+            expr1.clone().substitute(Variable::from("x"), Expr::Num(0)),
             *parse("(((),(0,2)),(y,0)).L").unwrap()
         ));
         assert!(Expr::alpha_equiv(
-            expr1.substitute(Variable::from("x"), Expr::Var("y".into())),
+            expr1.clone().substitute(Variable::from("x"), Expr::Var("y".into())),
             *parse("(((),(y,2)),(y,y)).L").unwrap()
         ));
     }

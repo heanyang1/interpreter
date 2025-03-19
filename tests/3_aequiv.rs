@@ -9,20 +9,20 @@ mod tests {
         let expr1 = parse("(fun (x : num) -> x) y").unwrap();
         assert!(Expr::alpha_equiv(
             *expr1.clone(),
-            expr1.substitute(Variable::from("x"), Expr::Num(0))
+            expr1.clone().substitute(Variable::from("x"), Expr::Num(0))
         ));
         assert!(Expr::alpha_equiv(
             *parse("(fun (x : num) -> x) 0").unwrap(),
-            expr1.substitute(Variable::from("y"), Expr::Num(0))
+            expr1.clone().substitute(Variable::from("y"), Expr::Num(0))
         ));
 
         let expr2 = parse("x + (fun (x : num) -> y)").unwrap();
         assert!(Expr::alpha_equiv(
-            expr2.substitute(Variable::from("x"), Expr::Num(0)),
+            expr2.clone().substitute(Variable::from("x"), Expr::Num(0)),
             *parse("0 + (fun (x : num) -> y)").unwrap()
         ));
         assert!(Expr::alpha_equiv(
-            expr2.substitute(Variable::from("y"), Expr::Num(0)),
+            expr2.clone().substitute(Variable::from("y"), Expr::Num(0)),
             *parse("x + (fun (x : num) -> 0)").unwrap()
         ));
 
@@ -47,11 +47,11 @@ mod tests {
 
         let expr2 = parse("fun (y : num) -> (x y)").unwrap();
         assert!(Expr::alpha_equiv(
-            expr2.substitute(Variable::from("x"), Expr::Var("y".into())),
+            expr2.clone().substitute(Variable::from("x"), Expr::Var("y".into())),
             *parse("fun (y_ : num) -> (y y_)").unwrap()
         ));
         assert!(Expr::alpha_equiv(
-            expr2.substitute(Variable::from("x"), Expr::Num(0)),
+            expr2.clone().substitute(Variable::from("x"), Expr::Num(0)),
             *parse("fun (y_ : num) -> (0 y_)").unwrap()
         ));
 
