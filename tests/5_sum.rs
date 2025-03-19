@@ -19,6 +19,12 @@ mod tests {
         assert_eq!(eval(&expr2, Verbosity::Normal), Expr::Num(3));
         assert_eq!(type_check(&expr2).unwrap(), Type::Num);
         let expr3 = parse(
+            "let x:num*((num*num)+num) = (100,inj 1=R as (num*num)+num) in case x.R {L(n)->(n.L)+1|R(n)->3*n}",
+        )
+        .unwrap();
+        assert_eq!(eval(&expr3, Verbosity::Normal), Expr::Num(3));
+        assert_eq!(type_check(&expr3).unwrap(), Type::Num);
+        let expr4 = parse(
             r#"
             let x:(num->num)+num =
                 (
@@ -29,8 +35,8 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(eval(&expr3, Verbosity::Normal), Expr::Num(2));
-        assert_eq!(type_check(&expr3).unwrap(), Type::Num);
+        assert_eq!(eval(&expr4, Verbosity::Normal), Expr::Num(2));
+        assert_eq!(type_check(&expr4).unwrap(), Type::Num);
     }
 
     #[test]

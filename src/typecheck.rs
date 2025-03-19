@@ -134,6 +134,19 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
                 Err(format!("Case branches have incompatible types: {:?} and {:?}", tau_eleft, tau_eright))
             }
         ),
+        // 6. fixpoints
+        Expr::Fix { x, tau, e } => do_!(
+            {
+                let mut ctx = ctx;
+                ctx.insert(x.clone(), *tau.clone());
+                type_check_expr(e, ctx)
+            } => tau_e,
+            if tau_e == **tau {
+                Ok(tau_e)
+            } else {
+                Err(format!("Fixpoint type mismatch: {:?} and {:?}", tau_e, tau))
+            }
+        ),
         _ => todo!("type_check_expr({:?})", ast),
     }
 }

@@ -6,6 +6,7 @@ fn fresh(v: &Variable) -> Variable {
     Variable::from(format!("{}_", v.0))
 }
 
+/// Trivial cases: iterate through or check the equality of an expression's children
 macro_rules! trivial {
     ($namespace:tt, $ty:tt, $rename:ident; $($prefix:ident),*; $($i:ident),+; $($suffix:ident),*) => {
         $namespace::$ty {
@@ -157,6 +158,18 @@ impl Symbol for Expr {
                         eright: Box::new(aux(depth_new, *eright)),
                     }
                 }
+                Expr::Fix { x, tau, e } => {
+                    let mut depth = depth;
+                    for (_, v) in depth.iter_mut() {
+                        *v += 1;
+                    }
+                    depth.insert(String::from(x.clone()).to_string(), 0);
+                    Expr::Fix {
+                        x: Variable::from("_"),
+                        tau: Box::new(tau.to_debruijn()),
+                        e: Box::new(aux(depth, *e)),
+                    }
+                }
                 _ => todo!("to_debruijn: {e:?}"),
             }
         }
@@ -284,6 +297,18 @@ impl Symbol for Expr {
                 (Expr::True, Expr::True)
                 | (Expr::False, Expr::False)
                 | (Expr::Unit, Expr::Unit) => true,
+                (
+                    Expr::Fix {
+                        x: x1,
+                        tau: tau1,
+                        e: e1,
+                    },
+                    Expr::Fix {
+                        x: x2,
+                        tau: tau2,
+                        e: e2,
+                    },
+                ) => trivial!(x1 == x2, tau1 == tau2; e1 == e2),
                 _ => false,
             }
         }
@@ -332,15 +357,9 @@ impl Symbol for Expr {
                     xright,
                     eright,
                 } => {
-                    let mut rename = rename.clone();
-                    let new_xleft = match rename.get(&xleft) {
-                        Some(Expr::Var(v)) => v.clone(),
-                        _ => fresh(&xleft),
-                    };
-                    let new_xright = match rename.get(&xright) {
-                        Some(Expr::Var(v)) => v.clone(),
-                        _ => fresh(&xright),
-                    };
+                    let mut rename = rename;
+                    let new_xleft = fresh(&xleft);
+                    let new_xright = fresh(&xright);
                     rename.extend([
                         (xleft.clone(), Expr::Var(new_xleft.clone())),
                         (xright.clone(), Expr::Var(new_xright.clone())),
@@ -351,6 +370,16 @@ impl Symbol for Expr {
                         eleft: Box::new(aux(rename.clone(), *eleft)),
                         xright: new_xright,
                         eright: Box::new(aux(rename, *eright)),
+                    }
+                }
+                Expr::Fix { x, tau, e } => {
+                    let mut rename = rename;
+                    let new_x = fresh(&x);
+                    rename.insert(x, Expr::Var(new_x.clone()));
+                    Expr::Fix {
+                        x: new_x,
+                        tau,
+                        e: Box::new(aux(rename, *e)),
                     }
                 }
                 _ => todo!(),

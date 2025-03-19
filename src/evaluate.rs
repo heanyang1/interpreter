@@ -55,12 +55,12 @@ pub fn eval(e: &Expr, verbose: Verbosity) -> Expr {
             }
             eval(&e_stepped, verbose)
         }
-        Outcome::Value => e.clone()
+        Outcome::Value => e.clone(),
     }
 }
 
-pub fn try_step(e: &Expr) -> Outcome {
-    match e {
+pub fn try_step(expr: &Expr) -> Outcome {
+    match expr {
         Expr::Lam { .. }
         | Expr::Num { .. }
         | Expr::True
@@ -172,7 +172,10 @@ pub fn try_step(e: &Expr) -> Outcome {
         Expr::Var(x) => unreachable!("Free variable {x:?} should be found in type checking"),
         // 4. product types
         Expr::Project { e, d } => free_fall!(
-            (e, |e| Expr::Project { e: Box::new(e), d: d.clone() }),
+            (e, |e| Expr::Project {
+                e: Box::new(e),
+                d: d.clone()
+            }),
             match e.as_ref() {
                 Expr::Pair { left, right } => match d {
                     Direction::Left => Outcome::Step(*left.clone()),
@@ -182,23 +185,34 @@ pub fn try_step(e: &Expr) -> Outcome {
             }
         ),
         // 5. sum types
-        Expr::Case { e, xleft, eleft, xright, eright } => {
+        Expr::Case {
+            e,
+            xleft,
+            eleft,
+            xright,
+            eright,
+        } => {
             free_fall!(
-            (e, |e| Expr::Case {
-                e: Box::new(e),
-                xleft: xleft.clone(),
-                eleft: eleft.clone(),
-                xright: xright.clone(),
-                eright: eright.clone(),
-            }),
-            match e.as_ref() {
-                Expr::Inject { e, d, .. } => match d {
-                    Direction::Left => Outcome::Step(eleft.substitute(xleft.clone(), *e.clone())),
-                    Direction::Right => Outcome::Step(eright.substitute(xright.clone(), *e.clone())),
-                },
-                _ => unreachable!(),
-            }
-        )},
+                (e, |e| Expr::Case {
+                    e: Box::new(e),
+                    xleft: xleft.clone(),
+                    eleft: eleft.clone(),
+                    xright: xright.clone(),
+                    eright: eright.clone(),
+                }),
+                match e.as_ref() {
+                    Expr::Inject { e, d, .. } => match d {
+                        Direction::Left =>
+                            Outcome::Step(eleft.substitute(xleft.clone(), *e.clone())),
+                        Direction::Right =>
+                            Outcome::Step(eright.substitute(xright.clone(), *e.clone())),
+                    },
+                    _ => unreachable!(),
+                }
+            )
+        }
+        // 6. fixpoints
+        Expr::Fix { x, e, .. } => Outcome::Step(e.substitute(x.clone(), expr.clone())),
         _ => todo!(),
     }
 }
