@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{ast::*, ast_util::Symbol, do_, monad::bind};
+use crate::{ast::*, ast_util::Symbol, do_, monad::Monad};
 
 pub fn type_check(ast: &Expr) -> Result<Type, String> {
     type_check_expr(ast, HashMap::new())
@@ -15,7 +15,11 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
             type_check_expr(right, ctx) => tau_right,
             match (tau_left.clone(), tau_right.clone()) {
                 (Type::Num, Type::Num) => Ok(Type::Num),
-                _ => Err(format!("Addition operands have incompatible types: {:?} {} {:?}", tau_left, binop, tau_right)),
+                _ => Err(format!(r#"
+Addition operands have incompatible types:
+    {:?}
+{}
+    {:?}"#, tau_left, binop, tau_right)),
             }
         ),
         Expr::Mulop { binop, left, right } => do_!(
@@ -23,7 +27,11 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
             type_check_expr(right, ctx) => tau_right,
             match (tau_left.clone(), tau_right.clone()) {
                 (Type::Num, Type::Num) => Ok(Type::Num),
-                _ => Err(format!("Multiplication operands have incompatible types: {:?} {} {:?}", tau_left, binop, tau_right)),
+                _ => Err(format!(r#"
+Multiplication operands have incompatible types:
+    {:?}
+{}
+    {:?}"#, tau_left, binop, tau_right)),
             }
         ),
         // 2. conditionals
@@ -33,7 +41,11 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
             type_check_expr(right, ctx) => tau_right,
             match (tau_left.clone(), tau_right.clone()) {
                 (Type::Num, Type::Num) => Ok(Type::Bool),
-                _ => Err(format!("Relational operands have incompatible types: {:?} {} {:?}", tau_left, relop, tau_right)),
+                _ => Err(format!(r#"
+Relational operands have incompatible types:
+    {:?}
+{}
+    {:?}"#, tau_left, relop, tau_right)),
             }
         ),
         Expr::If { cond, then_, else_ } => do_!(
@@ -41,8 +53,15 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
             type_check_expr(then_, ctx.clone()) => tau_then,
             type_check_expr(else_, ctx) => tau_else,
             match (tau_cond.clone(), tau_then.clone(), tau_else.clone()) {
-                (Type::Bool, tau_then, tau_else) if tau_then == tau_else => Ok(tau_then),
-                _ => Err(format!("If branches have incompatible types: if {:?} then {:?} else {:?}", tau_cond, tau_then, tau_else)),
+                (Type::Bool, tau_then, tau_else) if Type::alpha_equiv(tau_then.clone(), tau_else.clone()) => Ok(tau_then),
+                _ => Err(format!(r#"
+If branches have incompatible types:
+if
+    {:?}
+then
+    {:?}
+else
+    {:?}"#, tau_cond, tau_then, tau_else)),
             }
         ),
         Expr::And { left, right } => do_!(
@@ -50,7 +69,11 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
             type_check_expr(right, ctx) => tau_right,
             match (tau_left.clone(), tau_right.clone()) {
                 (Type::Bool, Type::Bool) => Ok(Type::Bool),
-                _ => Err(format!("And operands have incompatible types: {:?} && {:?}", tau_left, tau_right)),
+                _ => Err(format!(r#"
+And operands have incompatible types:
+    {:?}
+and
+    {:?}"#, tau_left, tau_right)),
             }
         ),
         Expr::Or { left, right } => do_!(
@@ -58,7 +81,11 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
             type_check_expr(right, ctx) => tau_right,
             match (tau_left.clone(), tau_right.clone()) {
                 (Type::Bool, Type::Bool) => Ok(Type::Bool),
-                _ => Err(format!("Or operands have incompatible types: {:?} || {:?}", tau_left, tau_right)),
+                _ => Err(format!(r#"
+Or operands have incompatible types:
+    {:?}
+and
+    {:?}"#, tau_left, tau_right)),
             }
         ),
         // 3. functions
@@ -72,14 +99,18 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
                 ctx.insert(x.clone(), *tau.clone());
                 type_check_expr(e, ctx.clone())
             } => tau_e,
-            Ok(Type::Fn { arg: tau.clone(), ret:  Box::new(tau_e) })
+            Ok(Type::Fn { arg: tau.clone(), ret: Box::new(tau_e) })
         ),
         Expr::App { lam, arg } => do_!(
             type_check_expr(lam, ctx.clone()) => tau_lam,
             type_check_expr(arg, ctx) => tau_arg,
             match tau_lam.clone() {
-                Type::Fn { arg, ret } if tau_arg == *arg => Ok(*ret),
-                _ => Err(format!("Function application has incompatible argument types: {:?} {:?}", tau_lam, tau_arg)),
+                Type::Fn { arg, ret } if Type::alpha_equiv(*arg.clone(), tau_arg.clone()) => Ok(*ret),
+                _ => Err(format!(r#"
+Function application has incompatible types:
+    {:?}
+and
+    {:?}"#, tau_lam, tau_arg)),
             }
         ),
         // 4. product types
@@ -93,7 +124,11 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
             match (tau_e.clone(), d) {
                 (Type::Product { left, .. }, Direction::Left) => Ok(*left),
                 (Type::Product { right, .. }, Direction::Right) => Ok(*right),
-                _ => Err(format!("Project has incompatible types: {:?}.{:?}", tau_e, d)),
+                _ => Err(format!(r#"
+Project has incompatible types:
+    {:?}
+and
+    {:?}"#, tau_e, d)),
             }
         ),
         Expr::Unit => Ok(Type::Unit),
@@ -101,8 +136,8 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
         Expr::Inject { e, d, tau } => do_!(
             type_check_expr(e, ctx) => tau_e,
             match (d, tau.as_ref()) {
-                (Direction::Left, Type::Sum { left, .. }) if tau_e == **left => Ok(*tau.clone()),
-                (Direction::Right, Type::Sum { right, .. }) if tau_e == **right => Ok(*tau.clone()),
+                (Direction::Left, Type::Sum { left, .. }) if Type::alpha_equiv(tau_e.clone(), *left.clone()) => Ok(*tau.clone()),
+                (Direction::Right, Type::Sum { right, .. }) if Type::alpha_equiv(tau_e.clone(), *right.clone()) => Ok(*tau.clone()),
                 _ => Err(format!("Inject has incompatible types: inj {:?} = {:?} as {:?}", tau_e, d, tau)),
             }
         ),
@@ -128,10 +163,14 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
                 ctx.insert(xright.clone(), tau_xright);
                 type_check_expr(eright, ctx)
             } => tau_eright,
-            if tau_eleft == tau_eright {
+            if Type::alpha_equiv(tau_eleft.clone(), tau_eright.clone()) {
                 Ok(tau_eleft)
             } else {
-                Err(format!("Case branches have incompatible types: {:?} and {:?}", tau_eleft, tau_eright))
+                Err(format!(r#"
+Case branches have incompatible types:
+    {:?}
+and
+    {:?}"#, tau_eleft, tau_eright))
             }
         ),
         // 6. fixpoints
@@ -141,10 +180,14 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
                 ctx.insert(x.clone(), *tau.clone());
                 type_check_expr(e, ctx)
             } => tau_e,
-            if tau_e == **tau {
+            if Type::alpha_equiv(*tau.clone(), tau_e.clone()) {
                 Ok(tau_e)
             } else {
-                Err(format!("Fixpoint type mismatch: {:?} and {:?}", tau_e, tau))
+                Err(format!(r#"
+Fixpoint type mismatch:
+    {:?}
+and
+    {:?}"#, tau_e, tau))
             }
         ),
         // 7. polymorphism
@@ -156,7 +199,11 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
             type_check_expr(e, ctx) => tau_e,
             match tau_e {
                 Type::Forall { a, tau: tau_body } => Ok(tau_body.substitute(a, *tau_arg.clone())),
-                _ => Err(format!("Type application has incompatible types: {:?} [{:?}]", tau_e, tau_arg)),
+                _ => Err(format!(r#"
+Type application has incompatible types:
+    {:?}
+and
+    {:?}"#, tau_e, tau_arg)),
             }
         ),
         // 8. recursive types
@@ -166,12 +213,16 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
                 if Type::alpha_equiv(tau_e.clone(), tau_body.clone().substitute(a.clone(), *tau.clone())) {
                     Ok(*tau.clone())
                 } else {
-                    Err(format!("Fold type mismatch: {:?} and {:?}", tau_e, tau))
+                    Err(format!(r#"
+Fold type mismatch:
+    {:?}
+and
+    {:?}"#, tau_e, tau))
                 }
             ),
             _ => Err(format!("Folding to type: {:?}", tau)),
         },
-        Expr::Unfold (e) => do_!(
+        Expr::Unfold(e) => do_!(
             type_check_expr(e, ctx) => tau_e,
             match tau_e.clone() {
                 Type::Rec { a, tau: tau_body } => Ok(tau_body.substitute(a.clone(), tau_e)),

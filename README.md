@@ -14,3 +14,10 @@ Parse your code and generate a nice picture of AST (if [Graphviz](https://graphv
 ```sh
 cargo run -- path/to/your/code.lam -a | dot -Tsvg > output.svg
 ```
+
+## Examples
+
+The examples are Python scripts that generates lambda calculus source file. You can use the interpreter's `-` flag (which means reading from standard input instead of a file) to see the result without generating a `.lam` file. For example:
+```sh
+python examples/linkedlst.py | cargo run -- - -v
+```

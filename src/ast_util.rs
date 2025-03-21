@@ -30,21 +30,11 @@ macro_rules! trivial {
     };
 }
 
-/// Check if two expressions are alpha equivalent
-macro_rules! equiv {
-    ($($term1:ident == $term2:ident),*; $($nonterm1:ident == $nonterm2:ident),*) => {
-        $($term1 == $term2 &&)*
-        $(aux(*$nonterm1, *$nonterm2) &&)*
-        true
-    }
-}
-
 pub trait Symbol: Sized {
     fn to_debruijn_map(self, depth: HashMap<Variable, u32>) -> Self;
     fn to_debruijn(self) -> Self {
         self.to_debruijn_map(HashMap::new())
     }
-    #[allow(unused)]
     fn alpha_equiv(e1: Self, e2: Self) -> bool;
     fn substitute_map(self, rename: HashMap<Variable, Self>) -> Self;
     fn substitute(self, s: Variable, e: Self) -> Self {
@@ -56,7 +46,9 @@ impl Symbol for Type {
     fn to_debruijn_map(self, depth: HashMap<Variable, u32>) -> Self {
         match self {
             Type::Num | Type::Bool | Type::Unit => self,
-            Type::Product { left, right } => trivial!(Type, Product, depth, to_debruijn_map;; left, right;),
+            Type::Product { left, right } => {
+                trivial!(Type, Product, depth, to_debruijn_map;; left, right;)
+            }
             Type::Sum { left, right } => trivial!(Type, Sum, depth, to_debruijn_map;; left, right;),
             Type::Var(v) => Type::Var(match depth.get(&v) {
                 None => v, // v is a free variable
@@ -68,7 +60,7 @@ impl Symbol for Type {
                     a: Variable::from("_"),
                     tau: Box::new(tau.to_debruijn_map(depth)),
                 }
-            } 
+            }
             Type::Rec { a, tau } => {
                 let depth = add_depth(depth, [a]);
                 Type::Rec {
@@ -82,41 +74,7 @@ impl Symbol for Type {
     }
 
     fn alpha_equiv(e1: Self, e2: Self) -> bool {
-        fn aux(e1: Type, e2: Type) -> bool {
-            match (e1, e2) {
-                (Type::Num, Type::Num) | (Type::Bool, Type::Bool) | (Type::Unit, Type::Unit) => {
-                    true
-                }
-                (Type::Fn { arg: l1, ret: r1 }, Type::Fn { arg: l2, ret: r2 })
-                | (
-                    Type::Product {
-                        left: l1,
-                        right: r1,
-                    },
-                    Type::Product {
-                        left: l2,
-                        right: r2,
-                    },
-                )
-                | (
-                    Type::Sum {
-                        left: l1,
-                        right: r1,
-                    },
-                    Type::Sum {
-                        left: l2,
-                        right: r2,
-                    },
-                ) => equiv!(; l1 == l2, r1 == r2),
-                (Type::Var(v1), Type::Var(v2)) => v1 == v2,
-                (Type::Forall { a: a1, tau: t1 }, Type::Forall { a: a2, tau: t2 })
-                | (Type::Rec { a: a1, tau: t1 }, Type::Rec { a: a2, tau: t2 }) => {
-                    equiv!(a1 == a2; t1 == t2)
-                }
-                _ => false,
-            }
-        }
-        aux(e1.to_debruijn(), e2.to_debruijn())
+        e1.to_debruijn() == e2.to_debruijn()
     }
 
     fn substitute_map(self, rename: HashMap<Variable, Type>) -> Type {
@@ -231,162 +189,9 @@ impl Symbol for Expr {
     }
 
     fn alpha_equiv(e1: Self, e2: Self) -> bool {
-        fn aux(e1: Expr, e2: Expr) -> bool {
-            match (e1, e2) {
-                (Expr::Num(n1), Expr::Num(n2)) => n1 == n2,
-                (Expr::Var(v1), Expr::Var(v2)) => v1 == v2,
-                (
-                    Expr::Addop {
-                        binop: b1,
-                        left: l1,
-                        right: r1,
-                    },
-                    Expr::Addop {
-                        binop: b2,
-                        left: l2,
-                        right: r2,
-                    },
-                ) => equiv!(b1 == b2; l1 == l2, r1 == r2),
-                (
-                    Expr::Mulop {
-                        binop: b1,
-                        left: l1,
-                        right: r1,
-                    },
-                    Expr::Mulop {
-                        binop: b2,
-                        left: l2,
-                        right: r2,
-                    },
-                ) => equiv!(b1 == b2; l1 == l2, r1 == r2),
-                (
-                    Expr::If {
-                        cond: c1,
-                        then_: t1,
-                        else_: e1,
-                    },
-                    Expr::If {
-                        cond: c2,
-                        then_: t2,
-                        else_: e2,
-                    },
-                ) => equiv!(;c1 == c2, t1 == t2, e1 == e2),
-                (
-                    Expr::Relop {
-                        relop: b1,
-                        left: l1,
-                        right: r1,
-                    },
-                    Expr::Relop {
-                        relop: b2,
-                        left: l2,
-                        right: r2,
-                    },
-                ) => equiv!(b1 == b2; l1 == l2, r1 == r2),
-                (
-                    Expr::And {
-                        left: l1,
-                        right: r1,
-                    },
-                    Expr::And {
-                        left: l2,
-                        right: r2,
-                    },
-                )
-                | (
-                    Expr::Or {
-                        left: l1,
-                        right: r1,
-                    },
-                    Expr::Or {
-                        left: l2,
-                        right: r2,
-                    },
-                )
-                | (
-                    Expr::Pair {
-                        left: l1,
-                        right: r1,
-                    },
-                    Expr::Pair {
-                        left: l2,
-                        right: r2,
-                    },
-                )
-                | (Expr::App { lam: l1, arg: r1 }, Expr::App { lam: l2, arg: r2 }) => {
-                    equiv!(; l1 == l2, r1 == r2)
-                }
-                (Expr::Project { e: e1, d: d1 }, Expr::Project { e: e2, d: d2 }) => {
-                    equiv!(d1 == d2; e1 == e2)
-                }
-                (
-                    Expr::Inject {
-                        e: e1,
-                        d: d1,
-                        tau: t1,
-                    },
-                    Expr::Inject {
-                        e: e2,
-                        d: d2,
-                        tau: t2,
-                    },
-                ) => equiv!(d1 == d2, t1 == t2; e1 == e2),
-                (
-                    Expr::Case {
-                        e: e1,
-                        xleft: xl1,
-                        eleft: el1,
-                        xright: xr1,
-                        eright: er1,
-                    },
-                    Expr::Case {
-                        e: e2,
-                        xleft: xl2,
-                        eleft: el2,
-                        xright: xr2,
-                        eright: er2,
-                    },
-                ) => equiv!(xl1 == xl2, xr1 == xr2; e1 == e2, el1 == el2, er1 == er2),
-                (
-                    Expr::Lam {
-                        x: x1,
-                        tau: t1,
-                        e: e1,
-                    },
-                    Expr::Lam {
-                        x: x2,
-                        tau: t2,
-                        e: e2,
-                    },
-                )
-                | (
-                    Expr::Fix {
-                        x: x1,
-                        tau: t1,
-                        e: e1,
-                    },
-                    Expr::Fix {
-                        x: x2,
-                        tau: t2,
-                        e: e2,
-                    },
-                ) => equiv!(t1 == t2, x1 == x2; e1 == e2),
-                (Expr::True, Expr::True)
-                | (Expr::False, Expr::False)
-                | (Expr::Unit, Expr::Unit) => true,
-                (Expr::TyLam { a: a1, e: e1 }, Expr::TyLam { a: a2, e: e2 }) => {
-                    equiv!(a1 == a2; e1 == e2)
-                }
-                (Expr::TyApp { e: e1, tau: t1 }, Expr::TyApp { e: e2, tau: t2 })
-                | (Expr::Fold { e: e1, tau: t1 }, Expr::Fold { e: e2, tau: t2 }) => {
-                    equiv!(t1 == t2; e1 == e2)
-                }
-                (Expr::Unfold(e1), Expr::Unfold(e2)) => e1 == e2,
-                _ => false,
-            }
-        }
-        aux(e1.to_debruijn(), e2.to_debruijn())
+        e1.to_debruijn() == e2.to_debruijn()
     }
+
     fn substitute_map(self, rename: HashMap<Variable, Expr>) -> Expr {
         match self {
             Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => self.clone(),

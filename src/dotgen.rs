@@ -1,130 +1,265 @@
-use crate::ast::*;
+use crate::{ast::*, do_, monad::Monad};
 
-use petgraph::dot::{Config, Dot};
-use petgraph::graph::{Graph, NodeIndex};
-use regex::Regex;
+static mut COUNTER: u32 = 0;
+
+unsafe fn inc() -> u32 {
+    unsafe {
+        COUNTER += 1;
+        COUNTER
+    }
+}
+
+#[derive(Debug, Clone)]
+struct NodeIndex {
+    name: Option<String>,
+    idx: u32,
+}
+
+impl NodeIndex {
+    fn new(name: Option<String>) -> Self {
+        NodeIndex {
+            name,
+            idx: unsafe { inc() },
+        }
+    }
+}
+
+struct Writer<T> {
+    value: T,
+    output: String,
+}
+
+impl<T> Monad<T> for Writer<T> {
+    type Output<U> = Writer<U>;
+
+    fn bind<U>(self, f: impl FnOnce(T) -> Writer<U>) -> Writer<U> {
+        let Writer { value, output } = f(self.value);
+        Writer {
+            value,
+            output: self.output + &output,
+        }
+    }
+}
 
 pub fn to_dot(ast: &Expr, name: Option<String>) -> String {
-    let mut graph = Graph::new();
-    let cur = graph.add_node(String::new());
-    ast.to_graph(&mut graph, Some(cur));
-    let dot = format!(
-        "{:?}",
-        Dot::with_attr_getters(
-            &graph,
-            &[Config::NodeNoLabel],
-            &|_, _| String::from("arrowhead=none"),
-            &|_, _| String::from("shape=point, width=0.1"),
-        )
-    );
     match name {
-        None => dot,
         Some(name) => {
-            // the dot graph is wrapped in `digraph { ... }`
-            // but we need `subgraph name { ... }`
-            let dot_content = dot.strip_prefix("digraph {").unwrap_or(&dot);
-            let re=Regex::new(r"[[:blank:]](\d+)[[:blank:]]").unwrap();
-            let dot_content = re.replace_all(dot_content, format!(" {name}_$1 "));
-            format!("subgraph {name} {{\n\t{dot_content}\n")
+            let root = NodeIndex::new(Some(name.clone()));
+            format!(
+                "subgraph {} {{\n\t{} [shape=point, width=0.1];\n{}\n}}",
+                name,
+                root.clone().idx,
+                ast.to_graph(root).output
+            )
+        }
+        None => {
+            let root = NodeIndex::new(None);
+            format!(
+                "digraph {{\n\t{} [shape=point, width=0.1];\n{}\n}}",
+                root.clone().idx,
+                ast.to_graph(root).output
+            )
         }
     }
 }
 
 trait ToGraph {
-    fn to_graph(&self, graph: &mut Graph<String, String>, parent: Option<NodeIndex>) -> NodeIndex;
+    fn to_graph(&self, parent: NodeIndex) -> Writer<NodeIndex>;
 }
 
-macro_rules! add_node {
-    ($s:expr, $graph:ident, $parent:ident; $( $children:expr ),* ) => {{
-        let cur = $graph.add_node(String::new());
-        if let Some(parent) = $parent {
-            $graph.add_edge(parent, cur, $s.to_string());
-        }
-        $(
-            $children.to_graph($graph, Some(cur));
-        )*
-        cur
-    }};
+fn new_node<T>(name: T, parent: NodeIndex, color: &str) -> Writer<NodeIndex>
+where
+    T: ToString,
+{
+    let cur = NodeIndex::new(parent.name.clone());
+    Writer {
+        value: cur.clone(),
+        output: format!(
+            "\t{} [shape=point, width=0.1, color=\"{}\"];\n\t{} -> {} [label=\"{}\", arrowhead=none, color=\"{}\", fontcolor=\"{}\"];\n",
+            cur.clone().idx,
+            color,
+            parent.idx,
+            cur.idx,
+            name.to_string(),
+            color,
+            color,
+        ),
+    }
 }
 
 impl ToGraph for Variable {
-    fn to_graph(&self, graph: &mut Graph<String, String>, parent: Option<NodeIndex>) -> NodeIndex {
-        let cur = graph.add_node(String::new());
-        if let Some(parent) = parent {
-            graph.add_edge(parent, cur, self.0.clone());
-        }
-        cur
+    fn to_graph(&self, parent: NodeIndex) -> Writer<NodeIndex> {
+        new_node(self.0.clone(), parent, "black")
     }
 }
 
 impl ToGraph for Expr {
-    fn to_graph(&self, graph: &mut Graph<String, String>, parent: Option<NodeIndex>) -> NodeIndex {
+    fn to_graph(&self, parent: NodeIndex) -> Writer<NodeIndex> {
         match self {
-            Expr::Var(x) => x.to_graph(graph, parent),
-            Expr::Num(n) => add_node!(n, graph, parent;),
-            Expr::Addop { binop, left, right } => add_node!(binop, graph, parent; left, right),
-            Expr::Mulop { binop, left, right } => add_node!(binop, graph, parent; left, right),
-            Expr::True => add_node!("true", graph, parent;),
-            Expr::False => add_node!("false", graph, parent;),
-            Expr::If { cond, then_, else_ } => add_node!("if", graph, parent; cond, then_, else_),
-            Expr::Relop { left, right, relop } => add_node!(relop, graph, parent; left, right),
-            Expr::And { left, right } => add_node!("&&", graph, parent; left, right),
-            Expr::Or { left, right } => add_node!("||", graph, parent; left, right),
-            Expr::Pair { left, right } => add_node!("pair", graph, parent; left, right),
-            Expr::Unit => add_node!("()", graph, parent;),
-            Expr::App { lam, arg } => add_node!("app", graph, parent; lam, arg),
-            Expr::Lam { x, tau, e } => add_node!("lam", graph, parent; x, tau, e),
-            Expr::Fix { x, tau, e } => add_node!("fix", graph, parent; x, tau, e),
-            Expr::Project { e, d } => add_node!("proj", graph, parent; e, d),
-            Expr::Inject { e, d, tau } => add_node!("inject", graph, parent; e, d, tau),
+            Expr::Var(_) | Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => {
+                new_node(self, parent, "red")
+            }
+            Expr::Addop { binop, left, right } => do_!(
+                new_node(binop, parent, "red") => cur,
+                left.to_graph(cur.clone()),
+                right.to_graph(cur)
+            ),
+            Expr::Mulop { binop, left, right } => do_!(
+                new_node(binop, parent, "red") => cur,
+                left.to_graph(cur.clone()),
+                right.to_graph(cur)
+            ),
+            Expr::If { cond, then_, else_ } => do_!(
+                new_node("if", parent, "red") => cur,
+                cond.to_graph(cur.clone()),
+                then_.to_graph(cur.clone()),
+                else_.to_graph(cur)
+            ),
+            Expr::Relop { left, right, relop } => do_!(
+                new_node(relop, parent, "red") => cur,
+                left.to_graph(cur.clone()),
+                right.to_graph(cur)
+            ),
+            Expr::And { left, right } => do_!(
+                new_node("&&", parent, "red") => cur,
+                left.to_graph(cur.clone()),
+                right.to_graph(cur)
+            ),
+            Expr::Or { left, right } => do_!(
+                new_node("||", parent, "red") => cur,
+                left.to_graph(cur.clone()),
+                right.to_graph(cur)
+            ),
+            Expr::Pair { left, right } => do_!(
+                new_node("pair", parent, "red") => cur,
+                left.to_graph(cur.clone()),
+                right.to_graph(cur)
+            ),
+            Expr::App { lam, arg } => do_!(
+                new_node("app", parent, "red") => cur,
+                lam.to_graph(cur.clone()),
+                arg.to_graph(cur)
+            ),
+            Expr::Lam { x, tau, e } => do_!(
+                new_node("lam", parent, "red") => cur,
+                x.to_graph(cur.clone()),
+                tau.to_graph(cur.clone()),
+                e.to_graph(cur)
+            ),
+            Expr::Fix { x, tau, e } => do_!(
+                new_node("fix", parent, "red") => cur,
+                x.to_graph(cur.clone()),
+                tau.to_graph(cur.clone()),
+                e.to_graph(cur)
+            ),
+            Expr::Project { e, d } => do_!(
+                new_node(match d {
+                    Direction::Left => "P_left",
+                    Direction::Right => "P_right",
+                }, parent, "red") => cur,
+                e.to_graph(cur)
+            ),
+            Expr::Inject { e, d, tau } => do_!(
+                new_node(match d {
+                    Direction::Left => "I_left",
+                    Direction::Right => "I_right",
+                }, parent, "red") => cur,
+                e.to_graph(cur.clone()),
+                tau.to_graph(cur)
+            ),
             Expr::Case {
                 e,
                 xleft,
                 eleft,
                 xright,
                 eright,
-            } => add_node!("case", graph, parent; e, xleft, eleft, xright, eright),
-            Expr::TyApp { e, tau } => add_node!("tyapp", graph, parent; e, tau),
-            Expr::TyLam { a, e } => add_node!("tylam", graph, parent; a, e),
-            Expr::Fold { e, tau } => add_node!("fold", graph, parent; e, tau),
-            Expr::Unfold(e) => add_node!("unfold", graph, parent; e),
+            } => do_!(
+                new_node("case", parent, "red") => cur,
+                e.to_graph(cur.clone()),
+                xleft.to_graph(cur.clone()),
+                eleft.to_graph(cur.clone()),
+                xright.to_graph(cur.clone()),
+                eright.to_graph(cur)
+            ),
+            Expr::TyApp { e, tau } => do_!(
+                new_node("tyapp", parent, "red") => cur,
+                e.to_graph(cur.clone()),
+                tau.to_graph(cur)
+            ),
+            Expr::TyLam { a, e } => do_!(
+                new_node("tylam", parent, "red") => cur,
+                a.to_graph(cur.clone()),
+                e.to_graph(cur)
+            ),
+            Expr::Fold { e, tau } => do_!(
+                new_node("fold", parent, "red") => cur,
+                e.to_graph(cur.clone()),
+                tau.to_graph(cur)
+            ),
+            Expr::Unfold(e) => do_!(
+                new_node("unfold", parent, "red") => cur,
+                e.to_graph(cur)
+            ),
             Expr::Import {
                 x,
                 a,
                 e_mod,
                 e_body,
-            } => add_node!("import", graph, parent; x, a, e_mod, e_body),
+            } => do_!(
+                new_node("import", parent, "red") => cur,
+                x.to_graph(cur.clone()),
+                a.to_graph(cur.clone()),
+                e_mod.to_graph(cur.clone()),
+                e_body.to_graph(cur)
+            ),
             Expr::Export {
                 e,
                 tau_adt,
                 tau_mod,
-            } => add_node!("export", graph, parent; e, tau_adt, tau_mod),
-        }
-    }
-}
-
-impl ToGraph for Direction {
-    fn to_graph(&self, graph: &mut Graph<String, String>, parent: Option<NodeIndex>) -> NodeIndex {
-        match self {
-            Direction::Left => add_node!("L", graph, parent;),
-            Direction::Right => add_node!("R", graph, parent;),
+            } => do_!(
+                new_node("export", parent, "red") => cur,
+                e.to_graph(cur.clone()),
+                tau_adt.to_graph(cur.clone()),
+                tau_mod.to_graph(cur)
+            ),
         }
     }
 }
 
 impl ToGraph for Type {
-    fn to_graph(&self, graph: &mut Graph<String, String>, parent: Option<NodeIndex>) -> NodeIndex {
+    fn to_graph(&self, parent: NodeIndex) -> Writer<NodeIndex> {
         match self {
-            Type::Num => add_node!("num", graph, parent;),
-            Type::Bool => add_node!("bool", graph, parent;),
-            Type::Product { left, right } => add_node!("*", graph, parent; left, right),
-            Type::Sum { left, right } => add_node!("+", graph, parent; left, right),
-            Type::Unit => add_node!("unit", graph, parent;),
-            Type::Fn { arg, ret } => add_node!("→", graph, parent; arg, ret),
-            Type::Var(v) => v.to_graph(graph, parent),
-            Type::Rec { a, tau } => add_node!("rec", graph, parent; a, tau),
-            Type::Forall { a, tau } => add_node!("forall", graph, parent; a, tau),
-            Type::Exists { a, tau } => add_node!("exists", graph, parent; a, tau),
+            Type::Num | Type::Bool | Type::Unit | Type::Var(_) => new_node(self, parent, "blue"),
+            Type::Product { left, right } => do_!(
+                new_node("*", parent, "blue") => cur,
+                left.to_graph(cur.clone()),
+                right.to_graph(cur)
+            ),
+            Type::Sum { left, right } => do_!(
+                new_node("+", parent, "blue") => cur,
+                left.to_graph(cur.clone()),
+                right.to_graph(cur)
+            ),
+            Type::Fn { arg, ret } => do_!(
+                new_node("→", parent, "blue") => cur,
+                arg.to_graph(cur.clone()),
+                ret.to_graph(cur)
+            ),
+            Type::Rec { a, tau } => do_!(
+                new_node("rec", parent, "blue") => cur,
+                a.to_graph(cur.clone()),
+                tau.to_graph(cur)
+            ),
+            Type::Forall { a, tau } => do_!(
+                new_node("forall", parent, "blue") => cur,
+                a.to_graph(cur.clone()),
+                tau.to_graph(cur)
+            ),
+            Type::Exists { a, tau } => do_!(
+                new_node("exists", parent, "blue") => cur,
+                a.to_graph(cur.clone()),
+                tau.to_graph(cur)
+            ),
         }
     }
 }

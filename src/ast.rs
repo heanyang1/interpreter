@@ -1,3 +1,4 @@
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Variable(pub String);
 
@@ -7,7 +8,10 @@ impl From<Variable> for String {
     }
 }
 
-impl<T> From<T> for Variable where T: ToString {
+impl<T> From<T> for Variable
+where
+    T: ToString,
+{
     fn from(i: T) -> Self {
         Self(i.to_string())
     }
@@ -25,6 +29,21 @@ pub enum Type {
     Rec { a: Variable, tau: Box<Type> },
     Forall { a: Variable, tau: Box<Type> },
     Exists { a: Variable, tau: Box<Type> },
+}
+
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Num => write!(f, "num"),
+            Type::Bool => write!(f, "bool"),
+            Type::Unit => write!(f, "unit"),
+            Type::Var(v) => write!(f, "{}", v.0),
+            Type::Fn { arg, ret } => write!(f, "{} → {}", arg, ret),
+            Type::Product { left, right } => write!(f, "{} * {}", left, right),
+            Type::Sum { left, right } => write!(f, "{} + {}", left, right),
+            _ => write!(f, "{:?}", self),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -173,4 +192,23 @@ pub enum Expr {
         e_mod: Box<Expr>,
         e_body: Box<Expr>,
     },
+}
+
+impl std::fmt::Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expr::Var(v) => write!(f, "{}", v.0),
+            Expr::Num(n) => write!(f, "{}", n),
+            Expr::True => write!(f, "true"),
+            Expr::False => write!(f, "false"),
+            Expr::Unit => write!(f, "()"),
+            Expr::Addop { binop, left, right } => write!(f, "({} {} {})", left, binop, right),
+            Expr::Mulop { binop, left, right } => write!(f, "({} {} {})", left, binop, right),
+            Expr::If { cond, then_, else_ } => write!(f, "if {} then {} else {}", cond, then_, else_),
+            Expr::Relop { relop, left, right } => write!(f, "({} {} {})", left, relop, right),
+            Expr::And { left, right } => write!(f, "({} && {})", left, right),
+            Expr::Or { left, right } => write!(f, "({} || {})", left, right),
+            _ => write!(f, "{:?}", self),
+        }
+    }
 }
