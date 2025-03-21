@@ -159,6 +159,25 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
                 _ => Err(format!("Type application has incompatible types: {:?} [{:?}]", tau_e, tau_arg)),
             }
         ),
+        // 8. recursive types
+        Expr::Fold { e, tau } => match tau.as_ref() {
+            Type::Rec { a, tau: tau_body } => do_!(
+                type_check_expr(e, ctx) => tau_e,
+                if Type::alpha_equiv(tau_e.clone(), tau_body.clone().substitute(a.clone(), *tau.clone())) {
+                    Ok(*tau.clone())
+                } else {
+                    Err(format!("Fold type mismatch: {:?} and {:?}", tau_e, tau))
+                }
+            ),
+            _ => Err(format!("Folding to type: {:?}", tau)),
+        },
+        Expr::Unfold (e) => do_!(
+            type_check_expr(e, ctx) => tau_e,
+            match tau_e.clone() {
+                Type::Rec { a, tau: tau_body } => Ok(tau_body.substitute(a.clone(), tau_e)),
+                _ => Err(format!("Unfolding from type: {:?}", tau_e)),
+            }
+        ),
         _ => todo!("type_check_expr({:?})", ast),
     }
 }

@@ -2,21 +2,41 @@ use crate::ast::*;
 
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::{Graph, NodeIndex};
+use regex::Regex;
 
-pub fn to_dot(ast: &Expr) -> String {
+pub fn to_dot(ast: &Expr, name: Option<String>) -> String {
     let mut graph = Graph::new();
-    ast.to_graph(&mut graph, None);
-    let dot = Dot::with_config(&graph, &[Config::NodeNoLabel]);
-    format!("{dot:?}")
+    let cur = graph.add_node(String::new());
+    ast.to_graph(&mut graph, Some(cur));
+    let dot = format!(
+        "{:?}",
+        Dot::with_attr_getters(
+            &graph,
+            &[Config::NodeNoLabel],
+            &|_, _| String::from("arrowhead=none"),
+            &|_, _| String::from("shape=point, width=0.1"),
+        )
+    );
+    match name {
+        None => dot,
+        Some(name) => {
+            // the dot graph is wrapped in `digraph { ... }`
+            // but we need `subgraph name { ... }`
+            let dot_content = dot.strip_prefix("digraph {").unwrap_or(&dot);
+            let re=Regex::new(r"[[:blank:]](\d+)[[:blank:]]").unwrap();
+            let dot_content = re.replace_all(dot_content, format!(" {name}_$1 "));
+            format!("subgraph {name} {{\n\t{dot_content}\n")
+        }
+    }
 }
 
 trait ToGraph {
-    fn to_graph(&self, graph: &mut Graph<(), String>, parent: Option<NodeIndex>) -> NodeIndex;
+    fn to_graph(&self, graph: &mut Graph<String, String>, parent: Option<NodeIndex>) -> NodeIndex;
 }
 
 macro_rules! add_node {
     ($s:expr, $graph:ident, $parent:ident; $( $children:expr ),* ) => {{
-        let cur = $graph.add_node(());
+        let cur = $graph.add_node(String::new());
         if let Some(parent) = $parent {
             $graph.add_edge(parent, cur, $s.to_string());
         }
@@ -28,8 +48,8 @@ macro_rules! add_node {
 }
 
 impl ToGraph for Variable {
-    fn to_graph(&self, graph: &mut Graph<(), String>, parent: Option<NodeIndex>) -> NodeIndex {
-        let cur = graph.add_node(());
+    fn to_graph(&self, graph: &mut Graph<String, String>, parent: Option<NodeIndex>) -> NodeIndex {
+        let cur = graph.add_node(String::new());
         if let Some(parent) = parent {
             graph.add_edge(parent, cur, self.0.clone());
         }
@@ -38,7 +58,7 @@ impl ToGraph for Variable {
 }
 
 impl ToGraph for Expr {
-    fn to_graph(&self, graph: &mut Graph<(), String>, parent: Option<NodeIndex>) -> NodeIndex {
+    fn to_graph(&self, graph: &mut Graph<String, String>, parent: Option<NodeIndex>) -> NodeIndex {
         match self {
             Expr::Var(x) => x.to_graph(graph, parent),
             Expr::Num(n) => add_node!(n, graph, parent;),
@@ -84,7 +104,7 @@ impl ToGraph for Expr {
 }
 
 impl ToGraph for Direction {
-    fn to_graph(&self, graph: &mut Graph<(), String>, parent: Option<NodeIndex>) -> NodeIndex {
+    fn to_graph(&self, graph: &mut Graph<String, String>, parent: Option<NodeIndex>) -> NodeIndex {
         match self {
             Direction::Left => add_node!("L", graph, parent;),
             Direction::Right => add_node!("R", graph, parent;),
@@ -93,7 +113,7 @@ impl ToGraph for Direction {
 }
 
 impl ToGraph for Type {
-    fn to_graph(&self, graph: &mut Graph<(), String>, parent: Option<NodeIndex>) -> NodeIndex {
+    fn to_graph(&self, graph: &mut Graph<String, String>, parent: Option<NodeIndex>) -> NodeIndex {
         match self {
             Type::Num => add_node!("num", graph, parent;),
             Type::Bool => add_node!("bool", graph, parent;),

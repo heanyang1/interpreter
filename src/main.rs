@@ -26,7 +26,19 @@ enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::InvalidArgs => write!(f, "Usage: interpreter <input> [-a | -v | -vv]"),
+            Self::InvalidArgs => write!(
+                f,
+                r#"
+                Usage: interpreter <input> [-a | -v | -vv | -va]
+                
+                -a: print graphviz code of AST only
+                -v: print evaluation result
+                -vv: print evaluation process
+                -va: print evaluation process as graphviz code of AST
+
+                Output will be printed to stdout
+                "#
+            ),
             Self::Parse(s) => write!(f, "Parse error: {s}"),
             Self::TypeCheck(s) => write!(f, "Type error: {s}"),
             Self::Io(err) => write!(f, "I/O error: {err}"),
@@ -49,6 +61,7 @@ fn parse_args() -> Result<(String, Mode), Error> {
                 "-a" => Mode::Ast,
                 "-v" => Mode::Interp(Verbosity::Verbose),
                 "-vv" => Mode::Interp(Verbosity::VeryVerbose),
+                "-va" => Mode::Interp(Verbosity::VerboseAST),
                 _ => return Err(Error::InvalidArgs),
             },
             None => Mode::Interp(Verbosity::Normal),
@@ -67,18 +80,22 @@ fn main() {
         // parse program
         parse(&input).map_err(Error::Parse) => ast,
         match mode {
-            Mode::Ast => Ok(println!("{}", to_dot(&ast))),
+            Mode::Ast => Ok(println!("{}", to_dot(&ast, None))),
             Mode::Interp(verbose) => do_!(
                 // type check
                 type_check(&ast).map_err(Error::TypeCheck) => t,
-                {
-                    if verbose != Verbosity::Normal {
-                        println!("Type: {t:?}")
-                    };
-                    Ok(())
+                match verbose {
+                    Verbosity::Normal => Ok(()),
+                    Verbosity::Verbose | Verbosity::VeryVerbose => Ok(println!("Type: {t:?}")),
+                    Verbosity::VerboseAST => Ok(println!("digraph Program {{")),
                 },
                 // evaluate
-                Ok(println!("{:?}", eval(&ast, verbose)))
+                Ok(eval(&ast, verbose)) => result,
+                if verbose == Verbosity::VerboseAST {
+                    Ok(println!("}}"))
+                } else {
+                    Ok(println!("{:?}", result))
+                }
             ),
         }
     ) {

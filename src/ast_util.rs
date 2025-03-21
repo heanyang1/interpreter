@@ -55,11 +55,9 @@ pub trait Symbol: Sized {
 impl Symbol for Type {
     fn to_debruijn_map(self, depth: HashMap<Variable, u32>) -> Self {
         match self {
-            Type::Num
-            | Type::Bool
-            | Type::Unit
-            | Type::Product { .. }
-            | Type::Sum { .. } => self,
+            Type::Num | Type::Bool | Type::Unit => self,
+            Type::Product { left, right } => trivial!(Type, Product, depth, to_debruijn_map;; left, right;),
+            Type::Sum { left, right } => trivial!(Type, Sum, depth, to_debruijn_map;; left, right;),
             Type::Var(v) => Type::Var(match depth.get(&v) {
                 None => v, // v is a free variable
                 Some(depth) => Variable::from(*depth),
@@ -67,6 +65,13 @@ impl Symbol for Type {
             Type::Forall { a, tau } => {
                 let depth = add_depth(depth, [a]);
                 Type::Forall {
+                    a: Variable::from("_"),
+                    tau: Box::new(tau.to_debruijn_map(depth)),
+                }
+            } 
+            Type::Rec { a, tau } => {
+                let depth = add_depth(depth, [a]);
+                Type::Rec {
                     a: Variable::from("_"),
                     tau: Box::new(tau.to_debruijn_map(depth)),
                 }
@@ -104,7 +109,8 @@ impl Symbol for Type {
                     },
                 ) => equiv!(; l1 == l2, r1 == r2),
                 (Type::Var(v1), Type::Var(v2)) => v1 == v2,
-                (Type::Forall { a: a1, tau: t1 }, Type::Forall { a: a2, tau: t2 }) => {
+                (Type::Forall { a: a1, tau: t1 }, Type::Forall { a: a2, tau: t2 })
+                | (Type::Rec { a: a1, tau: t1 }, Type::Rec { a: a2, tau: t2 }) => {
                     equiv!(a1 == a2; t1 == t2)
                 }
                 _ => false,
@@ -130,6 +136,15 @@ impl Symbol for Type {
                 let new_a = fresh(&a);
                 rename.insert(a, Type::Var(new_a.clone()));
                 Type::Forall {
+                    a: new_a,
+                    tau: Box::new(tau.substitute_map(rename)),
+                }
+            }
+            Type::Rec { a, tau } => {
+                let mut rename = rename;
+                let new_a = fresh(&a);
+                rename.insert(a, Type::Var(new_a.clone()));
+                Type::Rec {
                     a: new_a,
                     tau: Box::new(tau.substitute_map(rename)),
                 }
@@ -201,10 +216,8 @@ impl Symbol for Expr {
                     e: Box::new(e.to_debruijn_map(depth)),
                 }
             }
-            Expr::TyApp { e, tau } => Expr::TyApp {
-                e: Box::new(e.to_debruijn_map(depth.clone())),
-                tau: Box::new(tau.to_debruijn_map(depth)),
-            },
+            Expr::TyApp { e, tau } => trivial!(Expr, TyApp, depth, to_debruijn_map;; e, tau;),
+            Expr::Fold { e, tau } => trivial!(Expr, Fold, depth, to_debruijn_map;; e, tau;),
             Expr::TyLam { a, e } => {
                 let depth = add_depth(depth, [a]);
                 Expr::TyLam {
@@ -212,6 +225,7 @@ impl Symbol for Expr {
                     e: Box::new(e.to_debruijn_map(depth)),
                 }
             }
+            Expr::Unfold(e) => Expr::Unfold(Box::new(e.to_debruijn_map(depth))),
             _ => todo!("to_debruijn: {self:?}"),
         }
     }
@@ -363,9 +377,11 @@ impl Symbol for Expr {
                 (Expr::TyLam { a: a1, e: e1 }, Expr::TyLam { a: a2, e: e2 }) => {
                     equiv!(a1 == a2; e1 == e2)
                 }
-                (Expr::TyApp { e: e1, tau: t1 }, Expr::TyApp { e: e2, tau: t2 }) => {
+                (Expr::TyApp { e: e1, tau: t1 }, Expr::TyApp { e: e2, tau: t2 })
+                | (Expr::Fold { e: e1, tau: t1 }, Expr::Fold { e: e2, tau: t2 }) => {
                     equiv!(t1 == t2; e1 == e2)
                 }
+                (Expr::Unfold(e1), Expr::Unfold(e2)) => e1 == e2,
                 _ => false,
             }
         }
@@ -452,6 +468,8 @@ impl Symbol for Expr {
                 }
             }
             Expr::TyApp { e, tau } => trivial!(Expr, TyApp, rename, substitute_map;; e; tau),
+            Expr::Fold { e, tau } => trivial!(Expr, Fold, rename, substitute_map;; e; tau),
+            Expr::Unfold(e) => Expr::Unfold(Box::new(e.substitute_map(rename))),
             _ => todo!(),
         }
     }

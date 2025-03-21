@@ -1,4 +1,9 @@
-use crate::{ast::*, ast_util::Symbol, flags::Verbosity};
+use crate::{
+    ast::*,
+    ast_util::Symbol,
+    dotgen::to_dot,
+    flags::Verbosity,
+};
 
 pub enum Outcome {
     Step(Expr),
@@ -47,11 +52,24 @@ macro_rules! eval_right {
     };
 }
 
+static mut COUNTER: u32 = 0;
+
+unsafe fn inc() -> u32 {
+    unsafe {
+        COUNTER += 1;
+        COUNTER
+    }
+}
+
 pub fn eval(e: &Expr, verbose: Verbosity) -> Expr {
     match try_step(e) {
         Outcome::Step(e_stepped) => {
-            if verbose == Verbosity::VeryVerbose {
-                println!("stepped: {e:#?} |-> {e_stepped:#?}");
+            match verbose {
+                Verbosity::VeryVerbose => println!("stepped: {e:#?} |-> {e_stepped:#?}"),
+                Verbosity::VerboseAST => {
+                    println!("{}", to_dot(e, Some(format!("step{}", unsafe { inc() }))))
+                }
+                _ => (),
             }
             eval(&e_stepped, verbose)
         }
@@ -222,6 +240,14 @@ pub fn try_step(expr: &Expr) -> Outcome {
             }),
             match e.as_ref() {
                 Expr::TyLam { e, .. } => Outcome::Step(*e.clone()),
+                _ => unreachable!("{e:?}"),
+            }
+        ),
+        // 8. recursive types
+        Expr::Unfold(e) => free_fall!(
+            (e, |e| Expr::Unfold(Box::new(e))),
+            match e.as_ref() {
+                Expr::Fold { e, .. } => Outcome::Step(*e.clone()),
                 _ => unreachable!(),
             }
         ),
