@@ -1,9 +1,4 @@
-use crate::{
-    ast::*,
-    ast_util::Symbol,
-    dotgen::to_dot,
-    flags::Verbosity,
-};
+use crate::{ast::*, ast_util::Symbol, dotgen::to_dot, flags::Verbosity};
 
 pub enum Outcome {
     Step(Expr),
@@ -251,6 +246,24 @@ pub fn try_step(expr: &Expr) -> Outcome {
                 _ => unreachable!(),
             }
         ),
-        _ => todo!(),
+        // 9. existential types
+        Expr::Import {
+            x,
+            a,
+            e_mod,
+            e_body,
+        } => free_fall!(
+            (e_mod, |e_mod| Expr::Import {
+                x: x.clone(),
+                a: a.clone(),
+                e_mod: Box::new(e_mod),
+                e_body: e_body.clone(),
+            }),
+            match e_mod.as_ref() {
+                Expr::Export { e, .. } =>
+                    Outcome::Step(e_body.clone().substitute(x.clone(), *e.clone())),
+                _ => unreachable!(),
+            }
+        ),
     }
 }

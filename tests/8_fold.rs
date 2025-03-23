@@ -67,8 +67,12 @@ mod tests {
     #[test]
     fn ty_aequiv() {
         assert!(Type::alpha_equiv(
-            *parse_type("forall a . forall b . a -> b").unwrap(),
-            *parse_type("forall x . forall y . x -> y").unwrap()
+            *parse_type("rec b . num * (b -> num)").unwrap(),
+            *parse_type("rec c . num * (c -> num)").unwrap()
+        ));
+        assert!(!Type::alpha_equiv(
+            *parse_type("rec a . unit * (a -> num)").unwrap(),
+            *parse_type("rec a . num * (a -> num)").unwrap()
         ));
     }
 }

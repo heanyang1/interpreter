@@ -18,6 +18,15 @@ mod tests {
         .unwrap();
         assert_eq!(eval(&poly, Verbosity::Normal), Expr::Num(100));
         assert_eq!(type_check(&poly).unwrap(), Type::Num);
+        let poly = parse(
+            r#"
+            let id : unit -> (forall a . a -> a) = fun (u : unit) -> (tyfun a -> fun (x : a) -> x) in
+              (id ()) [num] 100
+            "#,
+        )
+        .unwrap();
+        assert_eq!(eval(&poly, Verbosity::Normal), Expr::Num(100));
+        assert_eq!(type_check(&poly).unwrap(), Type::Num);
         let opt = parse(
             r#"
             let none : forall a . unit + a = tyfun a -> (inj () = L as unit + a) in

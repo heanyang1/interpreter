@@ -69,7 +69,13 @@ impl Symbol for Type {
                 }
             }
             Type::Fn { arg, ret } => trivial!(Type, Fn, depth, to_debruijn_map;; arg, ret;),
-            _ => todo!(),
+            Type::Exists { a, tau } => {
+                let depth = add_depth(depth, [a]);
+                Type::Exists {
+                    a: Variable::from("_"),
+                    tau: Box::new(tau.to_debruijn_map(depth)),
+                }
+            }
         }
     }
 
@@ -107,7 +113,15 @@ impl Symbol for Type {
                     tau: Box::new(tau.substitute_map(rename)),
                 }
             }
-            _ => todo!(),
+            Type::Exists { a, tau } => {
+                let mut rename = rename;
+                let new_a = fresh(&a);
+                rename.insert(a, Type::Var(new_a.clone()));
+                Type::Exists {
+                    a: new_a,
+                    tau: Box::new(tau.substitute_map(rename)),
+                }
+            }
         }
     }
 }
@@ -184,7 +198,25 @@ impl Symbol for Expr {
                 }
             }
             Expr::Unfold(e) => Expr::Unfold(Box::new(e.to_debruijn_map(depth))),
-            _ => todo!("to_debruijn: {self:?}"),
+            Expr::Export {
+                e,
+                tau_adt,
+                tau_mod,
+            } => trivial!(Expr, Export, depth, to_debruijn_map;; e, tau_adt, tau_mod;),
+            Expr::Import {
+                x,
+                a,
+                e_mod,
+                e_body,
+            } => {
+                let depth = add_depth(depth, [x, a]);
+                Expr::Import {
+                    x: Variable::from("_"),
+                    a: Variable::from("_"),
+                    e_mod: Box::new(e_mod.to_debruijn_map(depth.clone())),
+                    e_body: Box::new(e_body.to_debruijn_map(depth)),
+                }
+            }
         }
     }
 
@@ -275,7 +307,31 @@ impl Symbol for Expr {
             Expr::TyApp { e, tau } => trivial!(Expr, TyApp, rename, substitute_map;; e; tau),
             Expr::Fold { e, tau } => trivial!(Expr, Fold, rename, substitute_map;; e; tau),
             Expr::Unfold(e) => Expr::Unfold(Box::new(e.substitute_map(rename))),
-            _ => todo!(),
+            Expr::Export {
+                e,
+                tau_adt,
+                tau_mod,
+            } => trivial!(Expr, Export, rename, substitute_map;; e; tau_adt, tau_mod),
+            Expr::Import {
+                x,
+                a,
+                e_mod,
+                e_body,
+            } => {
+                let mut rename = rename;
+                let new_x = fresh(&x);
+                let new_a = fresh(&a);
+                rename.extend([
+                    (x.clone(), Expr::Var(new_x.clone())),
+                    (a.clone(), Expr::Var(new_a.clone())),
+                ]);
+                Expr::Import {
+                    x: new_x,
+                    a: new_a,
+                    e_mod: Box::new(e_mod.substitute_map(rename.clone())),
+                    e_body: Box::new(e_body.substitute_map(rename)),
+                }
+            }
         }
     }
 }
