@@ -4,12 +4,12 @@ Some "macros" for linked lists.
 Print a program that output the head of the list when running this program directly.
 """
 
-def none():
-    return "(tyfun a -> inj () = L as unit + a)"
+def none(ty):
+    return f"(tyfun {ty}_ -> inj () = L as unit + {ty}_)"
 
 
-def some():
-    return "(tyfun a -> fun (x : a) -> inj x = R as unit + a)"
+def some(ty):
+    return f"(tyfun {ty}_ -> fun (x : {ty}_) -> inj x = R as unit + {ty}_)"
 
 
 def lst_ty(ty):
@@ -28,8 +28,8 @@ def head():
         (tyfun a ->
         fun (l : {lst_ty("a")}) ->
             case (unfold l) {{
-                L(x) -> ({none()} [a])
-                | R(t) -> ({some()} [a] (t.L))
+                L(x) -> ({none("a")} [a])
+                | R(t) -> ({some("a")} [a] (t.L))
             }})"""
 
 
@@ -38,8 +38,8 @@ def tail():
         (tyfun a ->
         fun (l : {lst_ty("a")}) ->
             case (unfold l) {{
-                L(x) -> ({none()} [a])
-                | R(t) -> ({some()} [a] (t.R))
+                L(x) -> ({none("a")} [a])
+                | R(t) -> ({some("a")} [a] (t.R))
             }})"""
 
 

@@ -141,7 +141,7 @@ impl ToGraph for Expr {
                 arg.to_graph(cur)
             ),
             Expr::Lam { x, tau, e } => do_!(
-                new_node("lam", parent, "red") => cur,
+                new_node("λ", parent, "red") => cur,
                 x.to_graph(cur.clone()),
                 tau.to_graph(cur.clone()),
                 e.to_graph(cur)
@@ -187,7 +187,7 @@ impl ToGraph for Expr {
                 tau.to_graph(cur)
             ),
             Expr::TyLam { a, e } => do_!(
-                new_node("tylam", parent, "red") => cur,
+                new_node("Λ", parent, "red") => cur,
                 a.to_graph(cur.clone()),
                 e.to_graph(cur)
             ),
@@ -251,12 +251,12 @@ impl ToGraph for Type {
                 tau.to_graph(cur)
             ),
             Type::Forall { a, tau } => do_!(
-                new_node("forall", parent, "blue") => cur,
+                new_node("∀", parent, "blue") => cur,
                 a.to_graph(cur.clone()),
                 tau.to_graph(cur)
             ),
             Type::Exists { a, tau } => do_!(
-                new_node("exists", parent, "blue") => cur,
+                new_node("∃", parent, "blue") => cur,
                 a.to_graph(cur.clone()),
                 tau.to_graph(cur)
             ),

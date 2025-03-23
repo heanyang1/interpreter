@@ -28,8 +28,13 @@ TyLam: Box<Expr> = {
 };
 
 Func: Box<Expr> = {
-    <e:App> => e,
+    <e:Fix> => e,
     "fun" "(" <x:Variable> ":" <tau:Type> ")" "->" <e:Func> => Box::new(Expr::Lam { x, tau, e }),
+};
+
+Fix: Box<Expr> = {
+    <e:App> => e,
+    "fix" "(" <x:Variable> ":" <tau:Type> ")" "->" <e:Fix> => Box::new(Expr::Fix { x, tau, e }),
 };
 
 App: Box<Expr> = {
@@ -69,7 +74,7 @@ If: Box<Expr> = {
 
 Case: Box<Expr> = {
     <e:Inject> => e,
-    "case" <e:Inject> "{" "L" "(" <xleft:Variable> ")" "->" <eleft:Inject> "|" "R" "(" <xright:Variable> ")" "->" <eright:Inject> "}" => Box::new(Expr::Case { e, xleft, eleft, xright, eright }),
+    "case" <e:Case> "{" "L" "(" <xleft:Variable> ")" "->" <eleft:Case> "|" "R" "(" <xright:Variable> ")" "->" <eright:Case> "}" => Box::new(Expr::Case { e, xleft, eleft, xright, eright }),
 };
 
 Inject: Box<Expr> = {

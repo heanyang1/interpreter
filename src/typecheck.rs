@@ -106,7 +106,7 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
             match (tau_e.clone(), d) {
                 (Type::Product { left, .. }, Direction::Left) => Ok(*left),
                 (Type::Product { right, .. }, Direction::Right) => Ok(*right),
-                _ => type_mismatch!(tau_e, d, "project"),
+                _ => Err(format!("Projection has incompatible type: {:?}", tau_e)),
             }
         ),
         Expr::Unit => Ok(Type::Unit),

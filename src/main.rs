@@ -133,7 +133,7 @@ fn main() {
                 if verbose == Verbosity::VerboseAST {
                     Ok(println!("{} }}", to_dot(&result, Some(String::from("last")))))
                 } else {
-                    Ok(println!("{:?}", result))
+                    Ok(println!("{}", result))
                 }
             ),
         }
