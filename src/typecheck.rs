@@ -23,14 +23,23 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<Type, Str
     match ast {
         // 1. arithmetic
         Expr::Num(_) => Ok(Type::Num),
-        Expr::Addop { binop, left, right } => do_!(
-            type_check_expr(left, ctx.clone()) => tau_left,
-            type_check_expr(right, ctx) => tau_right,
+        Expr::Addop { binop, left, right } => {
+            let tau_left = type_check_expr(left, ctx.clone())?;
+            let tau_right = type_check_expr(right, ctx.clone())?;
             match (tau_left.clone(), tau_right.clone()) {
                 (Type::Num, Type::Num) => Ok(Type::Num),
                 _ => type_mismatch!(tau_left, tau_right, binop),
             }
-        ),
+        }
+        
+        // do_!(
+        //     type_check_expr(left, ctx.clone()) => tau_left,
+        //     type_check_expr(right, ctx) => tau_right,
+        //     match (tau_left.clone(), tau_right.clone()) {
+        //         (Type::Num, Type::Num) => Ok(Type::Num),
+        //         _ => type_mismatch!(tau_left, tau_right, binop),
+        //     }
+        // ),
         Expr::Mulop { binop, left, right } => do_!(
             type_check_expr(left, ctx.clone()) => tau_left,
             type_check_expr(right, ctx) => tau_right,

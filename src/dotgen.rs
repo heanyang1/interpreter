@@ -39,6 +39,13 @@ impl<T> Monad<T> for Writer<T> {
             output: self.output + &output,
         }
     }
+
+    fn ret(value: T) -> Writer<T> {
+        Writer {
+            value,
+            output: String::new(),
+        }
+    }
 }
 
 pub fn to_dot(ast: &Expr, name: Option<String>) -> String {
@@ -64,7 +71,7 @@ pub fn to_dot(ast: &Expr, name: Option<String>) -> String {
 }
 
 trait ToGraph {
-    fn to_graph(&self, parent: NodeIndex) -> Writer<NodeIndex>;
+    fn to_graph(&self, parent: NodeIndex) -> Writer<()>;
 }
 
 fn new_node<T>(name: T, parent: NodeIndex, color: &str) -> Writer<NodeIndex>
@@ -88,17 +95,18 @@ where
 }
 
 impl ToGraph for Variable {
-    fn to_graph(&self, parent: NodeIndex) -> Writer<NodeIndex> {
-        new_node(self.0.clone(), parent, "black")
+    fn to_graph(&self, parent: NodeIndex) -> Writer<()> {
+        do_!(new_node(self.0.clone(), parent, "black"), Writer::ret(()))
     }
 }
 
 impl ToGraph for Expr {
-    fn to_graph(&self, parent: NodeIndex) -> Writer<NodeIndex> {
+    fn to_graph(&self, parent: NodeIndex) -> Writer<()> {
         match self {
-            Expr::Var(_) | Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => {
-                new_node(self, parent, "red")
-            }
+            Expr::Var(_) | Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => do_!(
+                new_node(self, parent, "red"),
+                Writer::ret(())
+            ),
             Expr::Addop { binop, left, right } => do_!(
                 new_node(binop, parent, "red") => cur,
                 left.to_graph(cur.clone()),
@@ -227,9 +235,12 @@ impl ToGraph for Expr {
 }
 
 impl ToGraph for Type {
-    fn to_graph(&self, parent: NodeIndex) -> Writer<NodeIndex> {
+    fn to_graph(&self, parent: NodeIndex) -> Writer<()> {
         match self {
-            Type::Num | Type::Bool | Type::Unit | Type::Var(_) => new_node(self, parent, "blue"),
+            Type::Num | Type::Bool | Type::Unit | Type::Var(_) => do_!(
+                new_node(self, parent, "blue"),
+                Writer::ret(())
+            ),
             Type::Product { left, right } => do_!(
                 new_node("*", parent, "blue") => cur,
                 left.to_graph(cur.clone()),
