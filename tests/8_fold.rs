@@ -3,7 +3,7 @@ mod tests {
     use interpreter::ast::*;
     use interpreter::ast_util::Symbol;
     use interpreter::evaluate::eval;
-    use interpreter::flags::Verbosity;
+    use interpreter::flags::{Mode, OutputMode};
     use interpreter::parser::{parse, parse_type};
     use interpreter::typecheck::type_check;
 
@@ -19,7 +19,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(eval(&objrec, Verbosity::Normal), Expr::Num(0));
+        assert_eq!(eval(&objrec, Mode::Eval, OutputMode::Full), Expr::Num(0));
         assert_eq!(type_check(&objrec).unwrap(), Type::Num);
         let counter = parse(
             r#"
@@ -34,7 +34,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(eval(&counter, Verbosity::Normal), Expr::Num(2));
+        assert_eq!(eval(&counter, Mode::Eval, OutputMode::Full), Expr::Num(2));
         assert_eq!(type_check(&counter).unwrap(), Type::Num);
     }
 

@@ -1,12 +1,5 @@
 """
 Reverse a linked list.
-
-The reversed list is messy because there are many unreachable branches like
-```
-Project { e: Pair { left: Num(4), right: <a large tree> }, d: Right }
-```
-
-You can see in the picture of output AST (using `-ae` flag) that the list is indeed reversed.
 """
 
 from linkedlst import *

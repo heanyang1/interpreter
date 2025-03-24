@@ -4,7 +4,7 @@ pub trait Monad<T> {
     /// The `>>=` operator
     fn bind<U>(self, f: impl FnOnce(T) -> Self::Output<U>) -> Self::Output<U>;
 
-    // The `return` operator is not implemented because all monads are trivial to construct
+    // The `return` operator is not required because all monads are trivial to construct
 }
 
 impl<T, E> Monad<T> for Result<T, E> {

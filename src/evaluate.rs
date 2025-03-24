@@ -1,4 +1,8 @@
-use crate::{ast::*, ast_util::Symbol, dotgen::to_dot, flags::Verbosity};
+use crate::{
+    ast::*,
+    ast_util::Symbol,
+    flags::{format_ast, Mode, OutputMode},
+};
 
 pub enum Outcome {
     Step(Expr),
@@ -56,17 +60,16 @@ unsafe fn inc() -> u32 {
     }
 }
 
-pub fn eval(e: &Expr, verbose: Verbosity) -> Expr {
+pub fn eval(e: &Expr, mode: Mode, output: OutputMode) -> Expr {
     match try_step(e) {
         Outcome::Step(e_stepped) => {
-            match verbose {
-                Verbosity::VeryVerbose => println!("stepped: {e:#?} |-> {e_stepped:#?}"),
-                Verbosity::VerboseAST => {
-                    println!("{}", to_dot(e, Some(format!("step{}", unsafe { inc() }))))
-                }
-                _ => (),
+            if mode == Mode::VeryVerbose {
+                println!(
+                    "{}",
+                    format_ast(e, output, Some(format!("step{}", unsafe { inc() })))
+                )
             }
-            eval(&e_stepped, verbose)
+            eval(&e_stepped, mode, output)
         }
         Outcome::Value => e.clone(),
     }

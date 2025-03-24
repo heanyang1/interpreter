@@ -246,7 +246,7 @@ impl ToGraph for Type {
                 ret.to_graph(cur)
             ),
             Type::Rec { a, tau } => do_!(
-                new_node("rec", parent, "blue") => cur,
+                new_node("μ", parent, "blue") => cur,
                 a.to_graph(cur.clone()),
                 tau.to_graph(cur)
             ),

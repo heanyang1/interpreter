@@ -3,7 +3,7 @@ mod tests {
     use interpreter::ast::*;
     use interpreter::ast_util::Symbol;
     use interpreter::evaluate::eval;
-    use interpreter::flags::Verbosity;
+    use interpreter::flags::{Mode, OutputMode};
     use interpreter::parser::parse;
     use interpreter::typecheck::type_check;
 
@@ -18,7 +18,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(eval(&fact, Verbosity::Normal), Expr::Num(120));
+        assert_eq!(eval(&fact, Mode::Eval, OutputMode::Full), Expr::Num(120));
         assert_eq!(type_check(&fact).unwrap(), Type::Num);
     }
 

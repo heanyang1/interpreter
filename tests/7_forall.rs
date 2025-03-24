@@ -3,7 +3,7 @@ mod tests {
     use interpreter::ast::*;
     use interpreter::ast_util::Symbol;
     use interpreter::evaluate::eval;
-    use interpreter::flags::Verbosity;
+    use interpreter::flags::{Mode, OutputMode};
     use interpreter::parser::{parse, parse_type};
     use interpreter::typecheck::type_check;
 
@@ -16,7 +16,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(eval(&poly, Verbosity::Normal), Expr::Num(100));
+        assert_eq!(eval(&poly, Mode::Eval, OutputMode::Full), Expr::Num(100));
         assert_eq!(type_check(&poly).unwrap(), Type::Num);
         let poly = parse(
             r#"
@@ -25,7 +25,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(eval(&poly, Verbosity::Normal), Expr::Num(100));
+        assert_eq!(eval(&poly, Mode::Eval, OutputMode::Full), Expr::Num(100));
         assert_eq!(type_check(&poly).unwrap(), Type::Num);
         let opt = parse(
             r#"
@@ -40,7 +40,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(eval(&opt, Verbosity::Normal), Expr::Num(2));
+        assert_eq!(eval(&opt, Mode::Eval, OutputMode::Full), Expr::Num(2));
         assert_eq!(type_check(&opt).unwrap(), Type::Num);
     }
 

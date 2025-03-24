@@ -13,29 +13,31 @@ The binary can be found at `project_dir/target/debug/interpreter`.
 
 Alternatively, you can run `cargo run -- args` to run the interpreter with arguments `args`.
 
-Usage:
-```
-interpreter <input> [-ab | -ae | -v | -vv | -va]
-
--ab: print graphviz code of the AST before evaluation
--ae: print graphviz code of the AST after evaluation
--v: print evaluation result
--vv: print evaluation process
--va: print evaluation process as graphviz code of AST
-
-Output will be printed to stdout
-
-Read input from stdin if <input> is -
-```
-
-You can use `dot` to generate a nice picture of AST (if [Graphviz](https://graphviz.org/) is installed):
+Some examples:
 ```sh
-cargo run -- path/to/your/code.lam -a | dot -Tsvg > output.svg
+# show usage
+cargo run -- --help
+# evaluate code.lam and print the whole AST
+cargo run -- eval full code.lam
+# print the result as human-readable format (some types are ignored and unreachable nodes are pruned)
+cargo run -- eval simplified code.lam
+# print the evaluation steps as de Bruijn indices
+cargo run -- very-verbose de-bruijn code.lam
+# parse the expression and print its AST
+cargo run -- parse full code.lam
+# generate a nice picture of AST (requires graphviz)
+cargo run -- parse graphviz code.lam | dot -Tsvg > output.svg
 ```
 
-## Examples
+## Example programs
 
-The examples are Python scripts that generates `.lam` source file. You can use the interpreter's `-` flag (which means reading from standard input instead of a file) to see the result without generating a `.lam` file. For example:
+The examples are Python scripts that generates `.lam` source file. The interpreter can read from stdin so you can use pipe to see the result without generating a `.lam` file:
 ```sh
-python examples/linkedlst.py | cargo run -- - -v
+python examples/queue.py | cargo run -- eval simplified
 ```
+
+Some results are very large (the largest AST has ~5k nodes) so it may take a very long time to generate picture or print step-by-step solution.
+
+## License
+
+GPLv3

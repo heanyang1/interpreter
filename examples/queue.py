@@ -47,6 +47,14 @@ export (
 
 
 if __name__ == "__main__":
+    # this should generate the code that:
+    # 1. creates a queue []
+    # 2. enqueues 1, the queue is now [1]
+    # 3. enqueues 2, the queue is now [2, 1]
+    # 4. enqueues 3, the queue is now [3, 2, 1]
+    # 5. enqueues 4, the queue is now [4, 3, 2, 1]
+    # 6. dequeues the queue
+    # so the result is (1, [4, 3, 2])   
     print(
         f"""
 let qm_list: {num_queue("a")} = {list_num_queue()} in

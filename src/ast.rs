@@ -40,7 +40,9 @@ impl std::fmt::Display for Type {
             Type::Fn { arg, ret } => write!(f, "{} → {}", arg, ret),
             Type::Product { left, right } => write!(f, "{} * {}", left, right),
             Type::Sum { left, right } => write!(f, "{} + {}", left, right),
-            _ => write!(f, "{:?}", self),
+            Type::Rec { a, tau } => write!(f, "μ {} . {}", a.0, tau),
+            Type::Forall { a, tau } => write!(f, "∀ {} . {}", a.0, tau),
+            Type::Exists { a, tau } => write!(f, "∃ {} . {}", a.0, tau),
         }
     }
 }
@@ -228,8 +230,8 @@ impl std::fmt::Display for Expr {
                 e, xleft.0, eleft, xright.0, eright
             ),
             Expr::App { lam, arg } => write!(f, "({} {})", lam, arg),
-            Expr::Lam { x, tau, e } => write!(f, "fun ({} : {}) -> {}", x.0, tau, e),
-            Expr::TyLam { a, e } => write!(f, "tyfun {} -> {}", a.0, e),
+            Expr::Lam { x, tau, e } => write!(f, "λ ({} : {}) -> {}", x.0, tau, e),
+            Expr::TyLam { a, e } => write!(f, "Λ {} -> {}", a.0, e),
             Expr::TyApp { e, tau } => write!(f, "({} {})", e, tau),
             Expr::Fix { x, tau, e } => write!(f, "fix ({} : {}) -> {}", x.0, tau, e),
             Expr::Fold { e, .. } => write!(f, "fold {} as ...", e),

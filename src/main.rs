@@ -7,13 +7,12 @@ mod monad;
 mod parser;
 mod typecheck;
 
-use dotgen::to_dot;
+use clap::Parser;
 use evaluate::eval;
-use flags::Verbosity;
+use flags::{format_ast, format_type, Mode, OutputMode};
 use monad::Monad;
 use parser::parse;
 use std::{
-    env::args,
     fmt,
     fs::read_to_string,
     io::{self, Read},
@@ -23,7 +22,6 @@ use typecheck::type_check;
 
 #[derive(Debug)]
 enum Error {
-    InvalidArgs,
     Parse(String),
     TypeCheck(String),
     Io(io::Error),
@@ -32,68 +30,10 @@ enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::InvalidArgs => write!(
-                f,
-                r#"
-Usage: interpreter <input> [-ab | -ae | -v | -vv | -va]
-
--ab: print graphviz code of the AST before evaluation
--ae: print graphviz code of the AST after evaluation
--v: print evaluation result
--vv: print evaluation process
--va: print evaluation process as graphviz code of AST
-
-Output will be printed to stdout
-
-Read input from stdin if <input> is -
-"#
-            ),
             Self::Parse(s) => write!(f, "Parse error: {s}"),
             Self::TypeCheck(s) => write!(f, "Type error: {s}"),
             Self::Io(err) => write!(f, "I/O error: {err}"),
         }
-    }
-}
-
-enum Mode {
-    Ast(AstMode),
-    Interp(Verbosity),
-}
-
-enum AstMode {
-    Before,
-    After,
-}
-
-enum InputMode {
-    Stdin,
-    File(String),
-}
-
-fn parse_args() -> Result<(InputMode, Mode), Error> {
-    let mut args = args();
-    args.next();
-
-    if let Some(input_path) = args.next() {
-        let input = if input_path == "-" {
-            InputMode::Stdin
-        } else {
-            InputMode::File(input_path)
-        };
-        let mode = match args.next() {
-            Some(mode_str) => match mode_str.as_str() {
-                "-ab" => Mode::Ast(AstMode::Before),
-                "-ae" => Mode::Ast(AstMode::After),
-                "-v" => Mode::Interp(Verbosity::Verbose),
-                "-vv" => Mode::Interp(Verbosity::VeryVerbose),
-                "-va" => Mode::Interp(Verbosity::VerboseAST),
-                _ => return Err(Error::InvalidArgs),
-            },
-            None => Mode::Interp(Verbosity::Normal),
-        };
-        Ok((input, mode))
-    } else {
-        Err(Error::InvalidArgs)
     }
 }
 
@@ -103,39 +43,53 @@ fn read_from_stdin() -> Result<String, std::io::Error> {
     Ok(buf)
 }
 
+#[derive(Parser)]
+struct Cli {
+    /// Program mode
+    #[arg(value_enum)]
+    mode: Mode,
+
+    /// Output format
+    #[arg(value_enum)]
+    output: OutputMode,
+
+    /// Input file. Read input from stdin if not specified.
+    input_path: Option<String>,
+}
+
 fn main() {
+    let cli = Cli::parse();
     if let Err(err) = do_!(
-        parse_args() => (input_path, mode),
         // read program
-        match input_path {
-            InputMode::Stdin => read_from_stdin().map_err(Error::Io),
-            InputMode::File(path) => read_to_string(path).map_err(Error::Io),
+        match cli.input_path {
+            None => read_from_stdin().map_err(Error::Io),
+            Some(path) => read_to_string(path).map_err(Error::Io),
         } => input,
         // parse program
         parse(&input).map_err(Error::Parse) => ast,
-        match mode {
-            Mode::Ast(AstMode::Before) => Ok(println!("{}", to_dot(&ast, None))),
-            Mode::Ast(AstMode::After) => do_!(
-                type_check(&ast).map_err(Error::TypeCheck),
-                Ok(eval(&ast, Verbosity::Normal)) => result,
-                Ok(println!("{}", to_dot(&result, None)))
-            ),
-            Mode::Interp(verbose) => do_!(
+        match cli.mode {
+            Mode::Parse => Ok(println!("{}", format_ast(&ast, cli.output, None))),
+            _ => do_!(
                 // type check
                 type_check(&ast).map_err(Error::TypeCheck) => t,
-                match verbose {
-                    Verbosity::Normal => Ok(()),
-                    Verbosity::Verbose | Verbosity::VeryVerbose => Ok(println!("Type: {t:?}")),
-                    Verbosity::VerboseAST => Ok(println!("digraph Program {{")),
+                // print type
+                match cli.mode {
+                    Mode::Verbose | Mode::VeryVerbose => Ok(println!("{}", format_type(&t, cli.output))),
+                    _ => Ok(()),
+                },
+                match cli.output {
+                    OutputMode::Graphviz => Ok(println!("digraph Program {{")),
+                    _ => Ok(()),
                 },
                 // evaluate
-                Ok(eval(&ast, verbose)) => result,
-                if verbose == Verbosity::VerboseAST {
-                    Ok(println!("{} }}", to_dot(&result, Some(String::from("last")))))
-                } else {
-                    Ok(println!("{}", result))
+                Ok(eval(&ast, cli.mode, cli.output)) => result,
+                // print result
+                Ok(println!("{}", format_ast(&result, cli.output, Some(String::from("last"))))),
+                match cli.output {
+                    OutputMode::Graphviz => Ok(println!("}}")),
+                    _ => Ok(()),
                 }
-            ),
+            )
         }
     ) {
         eprintln!("{err}");

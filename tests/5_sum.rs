@@ -3,26 +3,26 @@ mod tests {
     use interpreter::ast::*;
     use interpreter::ast_util::Symbol;
     use interpreter::evaluate::eval;
-    use interpreter::flags::Verbosity;
+    use interpreter::flags::{Mode, OutputMode};
     use interpreter::parser::parse;
     use interpreter::typecheck::type_check;
 
     #[test]
     fn eval_test() {
         let expr1 = parse("case (inj 1=L as num+num) {L(l)->l+1|R(r)->3*r}").unwrap();
-        assert_eq!(eval(&expr1, Verbosity::Normal), Expr::Num(2));
+        assert_eq!(eval(&expr1, Mode::Eval, OutputMode::Full), Expr::Num(2));
         assert_eq!(type_check(&expr1).unwrap(), Type::Num);
         let expr2 = parse(
             "let x:(num*num)+num = inj 1=R as (num*num)+num in case x {L(n)->(n.L)+1|R(n)->3*n}",
         )
         .unwrap();
-        assert_eq!(eval(&expr2, Verbosity::Normal), Expr::Num(3));
+        assert_eq!(eval(&expr2, Mode::Eval, OutputMode::Full), Expr::Num(3));
         assert_eq!(type_check(&expr2).unwrap(), Type::Num);
         let expr3 = parse(
             "let x:num*((num*num)+num) = (100,inj 1=R as (num*num)+num) in case x.R {L(n)->(n.L)+1|R(n)->3*n}",
         )
         .unwrap();
-        assert_eq!(eval(&expr3, Verbosity::Normal), Expr::Num(3));
+        assert_eq!(eval(&expr3, Mode::Eval, OutputMode::Full), Expr::Num(3));
         assert_eq!(type_check(&expr3).unwrap(), Type::Num);
         let expr4 = parse(
             r#"
@@ -35,7 +35,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(eval(&expr4, Verbosity::Normal), Expr::Num(2));
+        assert_eq!(eval(&expr4, Mode::Eval, OutputMode::Full), Expr::Num(2));
         assert_eq!(type_check(&expr4).unwrap(), Type::Num);
     }
 

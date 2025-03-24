@@ -3,7 +3,7 @@ mod tests {
     use interpreter::ast::*;
     use interpreter::ast_util::Symbol;
     use interpreter::evaluate::eval;
-    use interpreter::flags::Verbosity;
+    use interpreter::flags::{Mode, OutputMode};
     use interpreter::parser::{parse, parse_type};
     use interpreter::typecheck::type_check;
 
@@ -24,7 +24,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(eval(&objmod, Verbosity::Normal), Expr::Num(0));
+        assert_eq!(eval(&objmod, Mode::Eval, OutputMode::Full), Expr::Num(0));
         assert_eq!(type_check(&objmod).unwrap(), Type::Num);
         let objmod = parse(
             r#"
@@ -42,7 +42,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(eval(&objmod, Verbosity::Normal), Expr::Num(0));
+        assert_eq!(eval(&objmod, Mode::Eval, OutputMode::Full), Expr::Num(0));
         assert_eq!(type_check(&objmod).unwrap(), Type::Num);
     }
 
