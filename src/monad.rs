@@ -1,10 +1,12 @@
 pub trait Monad<T> {
+    /// just a dirty trick to use `Monad<U>` inside `Monad<T>`
     type Output<U>: Monad<U>;
 
     /// The `>>=` operator
     fn bind<U>(self, f: impl FnOnce(T) -> Self::Output<U>) -> Self::Output<U>;
 
-    // The `return` operator is not required because all monads are trivial to construct
+    // The `return` operator
+    fn ret(value: T) -> Self::Output<T>;
 }
 
 impl<T, E> Monad<T> for Result<T, E> {
@@ -15,6 +17,10 @@ impl<T, E> Monad<T> for Result<T, E> {
             Ok(x) => f(x),
             Err(e) => Err(e),
         }
+    }
+
+    fn ret(value: T) -> Result<T, E> {
+        Ok(value)
     }
 }
 
