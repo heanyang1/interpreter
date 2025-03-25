@@ -2,6 +2,8 @@
 
 Rust implementation of [Stanford CS242 assignment 4 (fall 2019)](https://stanford-cs242.github.io/f19/assignments/assign4/)
 
+For those who are learning CS242 (fall 2019 version): you'd better NOT see my solution. Instead, use this project as skeleton code and reference solution. I have tried my best to make the experience similar to (but less painful than) using the original OCaml skeleton code. See the [wiki](https://github.com/heanyang1/interpreter/wiki#notes-for-assignment-takers) for detailed instructions.
+
 ## Compile and Run
 
 Compile the interpreter:
