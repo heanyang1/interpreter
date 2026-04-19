@@ -103,10 +103,9 @@ impl ToGraph for Variable {
 impl ToGraph for Expr {
     fn to_graph(&self, parent: NodeIndex) -> Writer<()> {
         match self {
-            Expr::Var(_) | Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => do_!(
-                new_node(self, parent, "red"),
-                Writer::ret(())
-            ),
+            Expr::Var(_) | Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => {
+                do_!(new_node(self, parent, "red"), Writer::ret(()))
+            }
             Expr::Addop { binop, left, right } => do_!(
                 new_node(binop, parent, "red") => cur,
                 left.to_graph(cur.clone()),
@@ -148,10 +147,9 @@ impl ToGraph for Expr {
                 lam.to_graph(cur.clone()),
                 arg.to_graph(cur)
             ),
-            Expr::Lam { x, tau, e } => do_!(
+            Expr::Lam { x, e } => do_!(
                 new_node("λ", parent, "red") => cur,
                 x.to_graph(cur.clone()),
-                tau.to_graph(cur.clone()),
                 e.to_graph(cur)
             ),
             Expr::Fix { x, tau, e } => do_!(
@@ -237,10 +235,9 @@ impl ToGraph for Expr {
 impl ToGraph for Type {
     fn to_graph(&self, parent: NodeIndex) -> Writer<()> {
         match self {
-            Type::Num | Type::Bool | Type::Unit | Type::Var(_) => do_!(
-                new_node(self, parent, "blue"),
-                Writer::ret(())
-            ),
+            Type::Num | Type::Bool | Type::Unit | Type::Var(_) => {
+                do_!(new_node(self, parent, "blue"), Writer::ret(()))
+            }
             Type::Product { left, right } => do_!(
                 new_node("*", parent, "blue") => cur,
                 left.to_graph(cur.clone()),

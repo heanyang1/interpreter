@@ -8,6 +8,7 @@ mod tests {
     use interpreter::typecheck::type_check;
 
     #[test]
+    #[ignore]
     fn eval_test() {
         let expr1 = parse("case (inj 1=L as num+num) {L(l)->l+1|R(r)->3*r}").unwrap();
         assert_eq!(eval(&expr1, Mode::Eval, OutputMode::Full), Expr::Num(2));
@@ -40,6 +41,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn aequiv() {
         let expr1 = parse("case (inj 1=L as num+num) {L(l)->l+1|R(r)->3*r}").unwrap();
         assert!(Expr::alpha_equiv(

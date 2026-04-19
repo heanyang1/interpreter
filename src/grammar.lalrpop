@@ -11,7 +11,7 @@ LetRec: Box<Expr> = {
     "letrec" <x:Variable> ":" <tau:Type> "=" <evar:LetRec> "in" <ebody:LetRec> => {
         let xclone = x.clone();
         let tauclone = tau.clone();
-        let lam = Box::new(Expr::Lam { x: xclone, tau: tauclone, e: ebody });
+        let lam = Box::new(Expr::Lam { x: xclone, e: ebody });
         let arg = Box::new(Expr::Fix { x, tau, e: evar });
         Box::new(Expr::App { lam, arg })
     }
@@ -19,7 +19,7 @@ LetRec: Box<Expr> = {
 
 Let: Box<Expr> = {
     <e:TyLam> => e,
-    "let" <x:Variable> ":" <tau:Type> "=" <evar:Let> "in" <ebody:Let> => Box::new(Expr::App { lam: Box::new(Expr::Lam { x, tau, e: ebody }), arg: evar }),
+    "let" <x:Variable> "=" <evar:Let> "in" <ebody:Let> => Box::new(Expr::App { lam: Box::new(Expr::Lam { x, e: ebody }), arg: evar }),
 };
 
 TyLam: Box<Expr> = {
@@ -29,7 +29,7 @@ TyLam: Box<Expr> = {
 
 Func: Box<Expr> = {
     <e:Fix> => e,
-    "fun" "(" <x:Variable> ":" <tau:Type> ")" "->" <e:Func> => Box::new(Expr::Lam { x, tau, e }),
+    "fun" <x:Variable> "->" <e:Func> => Box::new(Expr::Lam { x, e }),
 };
 
 Fix: Box<Expr> = {

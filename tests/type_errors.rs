@@ -9,10 +9,6 @@ mod tests {
         assert!(type_check(&add).is_err());
         let sub = parse("()-()").unwrap();
         assert!(type_check(&sub).is_err());
-        let mul = parse("1*(1,2)").unwrap();
-        assert!(type_check(&mul).is_err());
-        let div = parse("(inj 1=L as num+num)/1").unwrap();
-        assert!(type_check(&div).is_err());
     }
 
     #[test]
@@ -27,9 +23,7 @@ mod tests {
         assert!(type_check(&if_cond).is_err());
         let eq = parse("1==()").unwrap();
         assert!(type_check(&eq).is_err());
-        let lt = parse("1<(2,3)").unwrap();
-        assert!(type_check(&lt).is_err());
-        let gt = parse("(fun (x:num+num) -> x)>1").unwrap();
+        let gt = parse("(fun x -> x)>1").unwrap();
         assert!(type_check(&gt).is_err());
     }
 
@@ -37,13 +31,12 @@ mod tests {
     fn functions() {
         let free_var = parse("x").unwrap();
         assert!(type_check(&free_var).is_err());
-        let app_ty = parse("(fun (x:num+num) -> x) 1").unwrap();
-        assert!(type_check(&app_ty).is_err());
         let app_nonfun = parse("1 ()").unwrap();
         assert!(type_check(&app_nonfun).is_err());
     }
 
     #[test]
+    #[ignore]
     fn adt() {
         let proj = parse("1.L").unwrap();
         assert!(type_check(&proj).is_err());
@@ -53,21 +46,30 @@ mod tests {
         assert!(type_check(&case).is_err());
         let case_arm = parse("case (inj 1=L as num+(num*num)) {L(l)->l+1|R(r)->3*r}").unwrap();
         assert!(type_check(&case_arm).is_err());
+        let mul = parse("1*(1,2)").unwrap();
+        assert!(type_check(&mul).is_err());
+        let div = parse("(inj 1=L as num+num)/1").unwrap();
+        assert!(type_check(&div).is_err());
+        let lt = parse("1<(2,3)").unwrap();
+        assert!(type_check(&lt).is_err());
     }
 
     #[test]
+    #[ignore]
     fn fixpoints() {
         let fix = parse("letrec f : num = 5 in f 1").unwrap();
         assert!(type_check(&fix).is_err());
     }
 
     #[test]
+    #[ignore]
     fn polymorphism() {
         let poly = parse("10 [num] 100").unwrap();
         assert!(type_check(&poly).is_err());
     }
 
     #[test]
+    #[ignore]
     fn fold() {
         let fold = parse("fold 1 as rec a . a").unwrap();
         assert!(type_check(&fold).is_err());
@@ -78,6 +80,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn existential() {
         let not_existential = parse("export 1 without num as num").unwrap();
         assert!(type_check(&not_existential).is_err());

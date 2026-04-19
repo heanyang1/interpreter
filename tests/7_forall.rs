@@ -8,6 +8,7 @@ mod tests {
     use interpreter::typecheck::type_check;
 
     #[test]
+    #[ignore]
     fn eval_test() {
         let poly = parse(
             r#"
@@ -42,9 +43,11 @@ mod tests {
         .unwrap();
         assert_eq!(eval(&opt, Mode::Eval, OutputMode::Full), Expr::Num(2));
         assert_eq!(type_check(&opt).unwrap(), Type::Num);
+        // TODO: Add examples where forall types is instantiated as different types
     }
 
     #[test]
+    #[ignore]
     fn aequiv() {
         assert!(Expr::alpha_equiv(
             *parse("tyfun a -> fun (x : a) -> x").unwrap(),

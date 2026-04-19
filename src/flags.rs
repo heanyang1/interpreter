@@ -1,6 +1,10 @@
 use clap::ValueEnum;
 
-use crate::{ast::{Expr, Type}, ast_util::Symbol, dotgen::to_dot};
+use crate::{
+    ast::{Expr, Type},
+    ast_util::Symbol,
+    dotgen::to_dot,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum Mode {

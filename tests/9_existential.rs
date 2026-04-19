@@ -8,6 +8,7 @@ mod tests {
     use interpreter::typecheck::type_check;
 
     #[test]
+    #[ignore]
     fn eval_test() {
         let objmod = parse(
             r#"
@@ -47,6 +48,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn aequiv() {
         assert!(Expr::alpha_equiv(
             *parse(

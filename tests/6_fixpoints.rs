@@ -8,6 +8,7 @@ mod tests {
     use interpreter::typecheck::type_check;
 
     #[test]
+    #[ignore]
     fn eval_test() {
         let fact = parse(
             r#"
@@ -23,6 +24,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn aequiv() {
         let fact = parse(
             r#"

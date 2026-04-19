@@ -6,6 +6,7 @@ mod flags;
 mod monad;
 mod parser;
 mod typecheck;
+mod union_find;
 
 use clap::Parser;
 use evaluate::eval;

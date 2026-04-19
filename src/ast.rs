@@ -1,18 +1,25 @@
+use std::fmt::Display;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Variable(pub String);
 
-impl From<Variable> for String {
-    fn from(value: Variable) -> Self {
-        value.0
+impl From<&str> for Variable
+{
+    fn from(value: &str) -> Self {
+        Variable(value.to_string())
     }
 }
 
-impl<T> From<T> for Variable
-where
-    T: ToString,
+impl From<String> for Variable
 {
-    fn from(i: T) -> Self {
-        Self(i.to_string())
+    fn from(value: String) -> Self {
+        Variable(value)
+    }
+}
+
+impl Display for Variable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -53,7 +60,7 @@ pub enum AddOp {
     Sub,
 }
 
-impl std::fmt::Display for AddOp {
+impl Display for AddOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AddOp::Add => write!(f, "+"),
@@ -68,7 +75,7 @@ pub enum MulOp {
     Div,
 }
 
-impl std::fmt::Display for MulOp {
+impl Display for MulOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MulOp::Mul => write!(f, "*"),
@@ -84,7 +91,7 @@ pub enum RelOp {
     Eq,
 }
 
-impl std::fmt::Display for RelOp {
+impl Display for RelOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RelOp::Lt => write!(f, "<"),
@@ -136,7 +143,6 @@ pub enum Expr {
     Var(Variable),
     Lam {
         x: Variable,
-        tau: Box<Type>,
         e: Box<Expr>,
     },
     App {
@@ -195,7 +201,7 @@ pub enum Expr {
     },
 }
 
-impl std::fmt::Display for Expr {
+impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::Var(v) => write!(f, "{}", v.0),
@@ -230,7 +236,7 @@ impl std::fmt::Display for Expr {
                 e, xleft.0, eleft, xright.0, eright
             ),
             Expr::App { lam, arg } => write!(f, "({} {})", lam, arg),
-            Expr::Lam { x, tau, e } => write!(f, "λ ({} : {}) -> {}", x.0, tau, e),
+            Expr::Lam { x, e } => write!(f, "λ {} -> {}", x.0, e),
             Expr::TyLam { a, e } => write!(f, "Λ {} -> {}", a.0, e),
             Expr::TyApp { e, tau } => write!(f, "({} {})", e, tau),
             Expr::Fix { x, tau, e } => write!(f, "fix ({} : {}) -> {}", x.0, tau, e),

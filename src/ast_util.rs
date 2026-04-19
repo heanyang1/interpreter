@@ -52,7 +52,7 @@ impl Symbol for Type {
             Type::Sum { left, right } => trivial!(Type, Sum, depth, to_debruijn_map;; left, right;),
             Type::Var(v) => Type::Var(match depth.get(&v) {
                 None => v, // v is a free variable
-                Some(depth) => Variable::from(*depth),
+                Some(depth) => Variable::from(depth.to_string()),
             }),
             Type::Forall { a, tau } => {
                 let depth = add_depth(depth, [a]);
@@ -132,13 +132,12 @@ impl Symbol for Expr {
             Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => self.clone(),
             Expr::Var(v) => Expr::Var(match depth.get(&v) {
                 None => v.clone(), // v is a free variable
-                Some(depth) => Variable::from(*depth),
+                Some(depth) => Variable::from(depth.to_string()),
             }),
-            Expr::Lam { x, tau, e } => {
+            Expr::Lam { x, e } => {
                 let depth = add_depth(depth, [x.clone()]);
                 Expr::Lam {
                     x: Variable::from("_"),
-                    tau: Box::new(tau.to_debruijn_map(depth.clone())),
                     e: Box::new(e.to_debruijn_map(depth)),
                 }
             }
@@ -241,13 +240,12 @@ impl Symbol for Expr {
             }
             Expr::And { left, right } => trivial!(Expr, And, rename, substitute_map;; left, right;),
             Expr::Or { left, right } => trivial!(Expr, Or, rename, substitute_map;; left, right;),
-            Expr::Lam { x, tau, e } => {
+            Expr::Lam { x, e } => {
                 let mut rename = rename;
                 let new_x = fresh(&x);
                 rename.insert(x, Expr::Var(new_x.clone()));
                 Expr::Lam {
                     x: new_x,
-                    tau,
                     e: Box::new(e.substitute_map(rename)),
                 }
             }

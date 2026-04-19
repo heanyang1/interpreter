@@ -6,3 +6,4 @@ pub mod flags;
 pub mod monad;
 pub mod parser;
 pub mod typecheck;
+pub mod union_find;

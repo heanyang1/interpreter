@@ -6,75 +6,75 @@ mod tests {
 
     #[test]
     fn inline_test() {
-        let expr1 = parse("(fun (x : num) -> x) y").unwrap();
+        let expr1 = parse("(fun x -> x) y").unwrap();
         assert!(Expr::alpha_equiv(
             *expr1.clone(),
             expr1.clone().substitute(Variable::from("x"), Expr::Num(0))
         ));
         assert!(Expr::alpha_equiv(
-            *parse("(fun (x : num) -> x) 0").unwrap(),
+            *parse("(fun x -> x) 0").unwrap(),
             expr1.clone().substitute(Variable::from("y"), Expr::Num(0))
         ));
 
-        let expr2 = parse("x + (fun (x : num) -> y)").unwrap();
+        let expr2 = parse("x + (fun x -> y)").unwrap();
         assert!(Expr::alpha_equiv(
             expr2.clone().substitute(Variable::from("x"), Expr::Num(0)),
-            *parse("0 + (fun (x : num) -> y)").unwrap()
+            *parse("0 + (fun x -> y)").unwrap()
         ));
         assert!(Expr::alpha_equiv(
             expr2.clone().substitute(Variable::from("y"), Expr::Num(0)),
-            *parse("x + (fun (x : num) -> 0)").unwrap()
+            *parse("x + (fun x -> 0)").unwrap()
         ));
 
         assert!(Expr::alpha_equiv(
-            *parse("fun (x : num) -> x").unwrap(),
-            *parse("fun (y : num) -> y").unwrap()
+            *parse("fun x -> x").unwrap(),
+            *parse("fun y -> y").unwrap()
         ));
 
         assert!(!Expr::alpha_equiv(
-            *parse("fun (x : num) -> fun (x : num) -> x + x").unwrap(),
-            *parse("fun (x : num) -> fun (y : num) -> y + x").unwrap()
+            *parse("fun x -> fun x -> x + x").unwrap(),
+            *parse("fun x -> fun y -> y + x").unwrap()
         ))
     }
 
     #[test]
     fn lec_2_example() {
-        let expr1 = parse("(fun (z : num) -> x)").unwrap();
+        let expr1 = parse("(fun z -> x)").unwrap();
         assert!(Expr::alpha_equiv(
             expr1.substitute(Variable::from("x"), Expr::Var("y".into())),
-            *parse("(fun (z : num) -> y)").unwrap()
+            *parse("(fun z -> y)").unwrap()
         ));
 
-        let expr2 = parse("fun (y : num) -> (x y)").unwrap();
+        let expr2 = parse("fun y -> (x y)").unwrap();
         assert!(Expr::alpha_equiv(
             expr2.clone().substitute(Variable::from("x"), Expr::Var("y".into())),
-            *parse("fun (y_ : num) -> (y y_)").unwrap()
+            *parse("fun y_ -> (y y_)").unwrap()
         ));
         assert!(Expr::alpha_equiv(
             expr2.clone().substitute(Variable::from("x"), Expr::Num(0)),
-            *parse("fun (y_ : num) -> (0 y_)").unwrap()
+            *parse("fun y_ -> (0 y_)").unwrap()
         ));
 
-        let expr3 = parse("x (fun (x : num) -> (x x))").unwrap();
+        let expr3 = parse("x (fun x -> (x x))").unwrap();
         assert!(Expr::alpha_equiv(
             expr3.substitute(Variable::from("x"), Expr::Var("y".into())),
-            *parse("y (fun (x : num) -> (x x))").unwrap()
+            *parse("y (fun x -> (x x))").unwrap()
         ));
     }
 
     #[test]
     fn arithmetic_test() {
         assert!(Expr::alpha_equiv(
-            *parse("fun (x : num) -> 3 + x - 2 * x / z").unwrap(),
-            *parse("fun (y : num) -> 3 + y - 2 * y / z").unwrap()
+            *parse("fun x -> 3 + x - 2 * x / z").unwrap(),
+            *parse("fun y -> 3 + y - 2 * y / z").unwrap()
         ));
         assert!(!Expr::alpha_equiv(
-            *parse("fun (x : num) -> 3 + x - 2 * x / z").unwrap(),
-            *parse("fun (x : num) -> 3 + y - 2 * x / z").unwrap()
+            *parse("fun x -> 3 + x - 2 * x / z").unwrap(),
+            *parse("fun x -> 3 + y - 2 * x / z").unwrap()
         ));
         assert!(!Expr::alpha_equiv(
-            *parse("fun (x : num) -> 3 + x - 2 * x / z").unwrap(),
-            parse("fun (x : num) -> 3 + y - 2 * x / z")
+            *parse("fun x -> 3 + x - 2 * x / z").unwrap(),
+            parse("fun x -> 3 + y - 2 * x / z")
                 .unwrap()
                 .substitute(Variable::from("y"), Expr::Var("x".into())),
         ));
@@ -83,20 +83,20 @@ mod tests {
     #[test]
     fn conditional_test() {
         assert!(Expr::alpha_equiv(
-            *parse("fun (x : num) -> 1&&x||z<0").unwrap(),
-            *parse("fun (y : num) -> 1&&y||z<0").unwrap()
+            *parse("fun x -> 1&&x||z<0").unwrap(),
+            *parse("fun y -> 1&&y||z<0").unwrap()
         ));
 
         assert!(Expr::alpha_equiv(
-            parse("fun (x : num) -> if 1 && x then z < 0 || y < z else x == y")
+            parse("fun x -> if 1 && x then z < 0 || y < z else x == y")
                 .unwrap()
                 .substitute(Variable::from("y"), Expr::Var("x".into())),
-            *parse("fun (x_ : num) -> if 1 && x_ then z < 0 || x < z else x_ == x").unwrap()
+            *parse("fun x_ -> if 1 && x_ then z < 0 || x < z else x_ == x").unwrap()
         ));
 
         assert!(Expr::alpha_equiv(
-            *parse("fun (x : num) -> if true then x else x").unwrap(),
-            *parse("fun (y : num) -> if true then y else y").unwrap()
+            *parse("fun x -> if true then x else x").unwrap(),
+            *parse("fun y -> if true then y else y").unwrap()
         ));
 
         assert!(!Expr::alpha_equiv(
