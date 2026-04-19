@@ -160,8 +160,8 @@ impl Symbol for Expr {
                 trivial!(Expr, Pair, depth, to_debruijn_map;; left, right;)
             }
             Expr::Project { e, d } => trivial!(Expr, Project, depth, to_debruijn_map;; e; d),
-            Expr::Inject { e, d, tau } => {
-                trivial!(Expr, Inject, depth, to_debruijn_map;; e; d, tau)
+            Expr::Inject { e, d } => {
+                trivial!(Expr, Inject, depth, to_debruijn_map;; e; d)
             }
             Expr::Case {
                 e,
@@ -258,8 +258,8 @@ impl Symbol for Expr {
                 trivial!(Expr, Pair, rename, substitute_map;; left, right;)
             }
             Expr::Project { e, d } => trivial!(Expr, Project, rename, substitute_map;; e; d),
-            Expr::Inject { e, d, tau } => {
-                trivial!(Expr, Inject, rename, substitute_map;; e; d, tau)
+            Expr::Inject { e, d } => {
+                trivial!(Expr, Inject, rename, substitute_map;; e; d)
             }
             Expr::Case {
                 e,

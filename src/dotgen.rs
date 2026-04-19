@@ -165,13 +165,12 @@ impl ToGraph for Expr {
                 }, parent, "red") => cur,
                 e.to_graph(cur)
             ),
-            Expr::Inject { e, d, tau } => do_!(
+            Expr::Inject { e, d } => do_!(
                 new_node(match d {
                     Direction::Left => "I_left",
                     Direction::Right => "I_right",
                 }, parent, "red") => cur,
-                e.to_graph(cur.clone()),
-                tau.to_graph(cur)
+                e.to_graph(cur.clone())
             ),
             Expr::Case {
                 e,

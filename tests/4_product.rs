@@ -8,7 +8,6 @@ mod tests {
     use interpreter::typecheck::type_check;
 
     #[test]
-    #[ignore]
     fn eval_test() {
         let expr1 = parse("(1+2,3-4).L").unwrap();
         assert_eq!(eval(&expr1, Mode::Eval, OutputMode::Full), Expr::Num(3));

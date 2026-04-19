@@ -9,7 +9,10 @@ use crate::{ast::*, union_find::UnionFind};
 type Constraint = Vec<(Type, Type)>;
 
 pub fn type_check(ast: &Expr) -> Result<Type, String> {
-    let (cur_type, constraints) = type_check_expr(ast, HashMap::new())?;
+    let mut ctx = HashMap::new();
+    let (cur_type, constraints) = type_check_expr(ast, &mut ctx)?;
+    assert!(ctx.is_empty());
+    println!("{cur_type}, {constraints:?}");
     let (mut uf, map) = unification(constraints)?;
     get_type(cur_type, &mut uf, &map)
 }
@@ -30,6 +33,9 @@ fn all_type_vars(tau: &Type) -> Vec<Variable> {
         Type::Bool | Type::Num | Type::Unit => vec![],
         Type::Var(x) => vec![x.clone()],
         Type::Fn { arg, ret } => flat!(vec![all_type_vars(arg), all_type_vars(ret)]),
+        Type::Product { left, right } | Type::Sum { left, right } => {
+            flat!(vec![all_type_vars(left), all_type_vars(right)])
+        }
         _ => todo!(),
     }
 }
@@ -49,7 +55,7 @@ fn unification(
         match constraint.pop_front().unwrap() {
             (Type::Bool, Type::Bool) | (Type::Num, Type::Num) | (Type::Unit, Type::Unit) => (),
             (Type::Var(l), Type::Var(r)) => {
-                uf.union(&l, &r);
+                uf.union(&l, &r).unwrap();
             }
             (Type::Var(var), val) | (val, Type::Var(var)) => match map.insert(var, val.clone()) {
                 None => (),
@@ -69,12 +75,34 @@ fn unification(
             ) => {
                 constraint.extend(vec![(*arg_l, *arg_r), (*ret_l, *ret_r)].into_iter());
             }
+            (
+                Type::Product {
+                    left: l_1,
+                    right: r_1,
+                },
+                Type::Product {
+                    left: l_2,
+                    right: r_2,
+                },
+            )
+            | (
+                Type::Sum {
+                    left: l_1,
+                    right: r_1,
+                },
+                Type::Sum {
+                    left: l_2,
+                    right: r_2,
+                },
+            ) => {
+                constraint.extend(vec![(*l_1, *l_2), (*r_1, *r_2)].into_iter());
+            }
             (lhs, rhs) => return Err(format!("Unification failed with type {lhs} and {rhs}")),
         }
     }
     let updated_map = map
         .into_iter()
-        .map(|(x, y)| (uf.find(&x).clone(), y))
+        .map(|(x, y)| (uf.find(&x).unwrap().clone(), y))
         .collect();
     Ok((uf, updated_map))
 }
@@ -84,7 +112,7 @@ fn get_type_var(
     uf: &mut UnionFind<Variable>,
     map: &HashMap<Variable, Type>,
 ) -> Result<Type, String> {
-    let root = uf.find(&tau);
+    let root = uf.find(&tau).map_err(|_| format!("Free variable {tau}"))?;
     let result = match map.get(root) {
         Some(r) => r,
         None => return Err(format!("Free variable {root}")),
@@ -97,6 +125,17 @@ fn get_type_var(
     Ok(result.clone().substitute_map(var_to_type))
 }
 
+macro_rules! trivial_get_type {
+    ($arm:tt, $x:ident, $y:ident, $uf:ident, $map:ident) => {{
+        let tx = get_type(*$x, $uf, $map)?;
+        let ty = get_type(*$y, $uf, $map)?;
+        Ok(Type::$arm {
+            $x: Box::new(tx),
+            $y: Box::new(ty),
+        })
+    }};
+}
+
 fn get_type(
     tau: Type,
     uf: &mut UnionFind<Variable>,
@@ -105,26 +144,28 @@ fn get_type(
     match tau {
         Type::Bool | Type::Num | Type::Unit => Ok(tau),
         Type::Var(x) => get_type_var(x, uf, map),
-        Type::Fn { arg, ret } => {
-            let tau_arg = get_type(*arg, uf, map)?;
-            let tau_ret = get_type(*ret, uf, map)?;
-            Ok(Type::Fn {
-                arg: Box::new(tau_arg),
-                ret: Box::new(tau_ret),
-            })
+        Type::Fn { arg, ret } => trivial_get_type!(Fn, arg, ret, uf, map),
+        Type::Product { left, right } => {
+            trivial_get_type!(Product, left, right, uf, map)
+        }
+        Type::Sum { left, right } => {
+            trivial_get_type!(Sum, left, right, uf, map)
         }
         _ => todo!(),
     }
 }
 
 // TODO: Change its name to get_constraints after we have finish every cases
-fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<(Type, Constraint), String> {
+fn type_check_expr(
+    ast: &Expr,
+    ctx: &mut HashMap<Variable, Type>,
+) -> Result<(Type, Constraint), String> {
     match ast {
         // 1. arithmetic
         Expr::Num(_) => Ok((Type::Num, vec![])),
         Expr::Addop { left, right, .. } | Expr::Mulop { left, right, .. } => {
-            let (tau_left, c_left) = type_check_expr(left, ctx.clone())?;
-            let (tau_right, c_right) = type_check_expr(right, ctx.clone())?;
+            let (tau_left, c_left) = type_check_expr(left, ctx)?;
+            let (tau_right, c_right) = type_check_expr(right, ctx)?;
             let constraints = flat!(vec![
                 c_left,
                 c_right,
@@ -135,7 +176,7 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<(Type, Co
         // 2. conditionals
         Expr::True | Expr::False => Ok((Type::Bool, vec![])),
         Expr::Relop { left, right, .. } => {
-            let (tau_left, c_left) = type_check_expr(left, ctx.clone())?;
+            let (tau_left, c_left) = type_check_expr(left, ctx)?;
             let (tau_right, c_right) = type_check_expr(right, ctx)?;
             let constraints = flat!(vec![
                 c_left,
@@ -145,8 +186,8 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<(Type, Co
             Ok((Type::Bool, constraints))
         }
         Expr::If { cond, then_, else_ } => {
-            let (tau_cond, c_cond) = type_check_expr(cond, ctx.clone())?;
-            let (tau_then, c_then) = type_check_expr(then_, ctx.clone())?;
+            let (tau_cond, c_cond) = type_check_expr(cond, ctx)?;
+            let (tau_then, c_then) = type_check_expr(then_, ctx)?;
             let (tau_else, c_else) = type_check_expr(else_, ctx)?;
             let constraints = flat!(vec![
                 c_cond,
@@ -157,7 +198,7 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<(Type, Co
             Ok((tau_then, constraints))
         }
         Expr::And { left, right } | Expr::Or { left, right } => {
-            let (tau_left, c_left) = type_check_expr(left, ctx.clone())?;
+            let (tau_left, c_left) = type_check_expr(left, ctx)?;
             let (tau_right, c_right) = type_check_expr(right, ctx)?;
             let constraints = flat!(vec![
                 c_left,
@@ -173,9 +214,9 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<(Type, Co
         },
         Expr::Lam { x, e } => {
             let tau = fresh_type_var();
-            let mut ctx_and_x = ctx.clone();
-            ctx_and_x.insert(x.clone(), tau.clone());
-            let (tau_ret, c_ret) = type_check_expr(e, ctx_and_x)?;
+            ctx.insert(x.clone(), tau.clone());
+            let (tau_ret, c_ret) = type_check_expr(e, ctx)?;
+            ctx.remove(x);
             Ok((
                 Type::Fn {
                     arg: Box::new(tau),
@@ -185,7 +226,7 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<(Type, Co
             ))
         }
         Expr::App { lam, arg } => {
-            let (tau_lam, c_lam) = type_check_expr(lam, ctx.clone())?;
+            let (tau_lam, c_lam) = type_check_expr(lam, ctx)?;
             let (tau_arg, c_arg) = type_check_expr(arg, ctx)?;
             let tau_ret = fresh_type_var();
             let constraints = flat!(vec![
@@ -201,30 +242,91 @@ fn type_check_expr(ast: &Expr, ctx: HashMap<Variable, Type>) -> Result<(Type, Co
             ]);
             Ok((tau_ret, constraints))
         }
-        // // 4. product types
-        // Expr::Pair { left, right } => do_!(
-        //     type_check_expr(left, ctx.clone()) => tau_left,
-        //     type_check_expr(right, ctx) => tau_right,
-        //     Ok(Type::Product { left: Box::new(tau_left), right: Box::new(tau_right) })
-        // ),
-        // Expr::Project { e, d } => do_!(
-        //     type_check_expr(e, ctx) => tau_e,
-        //     match (tau_e.clone(), d) {
-        //         (Type::Product { left, .. }, Direction::Left) => Ok(*left),
-        //         (Type::Product { right, .. }, Direction::Right) => Ok(*right),
-        //         _ => Err(format!("Projection has incompatible type: {:?}", tau_e)),
-        //     }
-        // ),
+        // 4. product types
+        Expr::Pair { left, right } => {
+            let (tau_l, c_l) = type_check_expr(left, ctx)?;
+            let (tau_r, c_r) = type_check_expr(right, ctx)?;
+            let constraints = flat!(vec![c_l, c_r]);
+            Ok((
+                Type::Product {
+                    left: Box::new(tau_l),
+                    right: Box::new(tau_r),
+                },
+                constraints,
+            ))
+        }
+        Expr::Project { e, d } => {
+            let (tau_e, c_e) = type_check_expr(e, ctx)?;
+            let tau_l = fresh_type_var();
+            let tau_r = fresh_type_var();
+            let constraints = flat!(vec![
+                c_e,
+                vec![(
+                    tau_e,
+                    Type::Product {
+                        left: Box::new(tau_l.clone()),
+                        right: Box::new(tau_r.clone())
+                    }
+                )]
+            ]);
+            let tau_ret = match d {
+                Direction::Left => tau_l,
+                Direction::Right => tau_r,
+            };
+            Ok((tau_ret, constraints))
+        }
         Expr::Unit => Ok((Type::Unit, vec![])),
-        // // 5. sum types
-        // Expr::Inject { e, d, tau } => do_!(
-        //     type_check_expr(e, ctx) => tau_e,
-        //     match (d, tau.as_ref()) {
-        //         (Direction::Left, Type::Sum { left, .. }) if Type::alpha_equiv(tau_e.clone(), *left.clone()) => Ok(*tau.clone()),
-        //         (Direction::Right, Type::Sum { right, .. }) if Type::alpha_equiv(tau_e.clone(), *right.clone()) => Ok(*tau.clone()),
-        //         _ => Err(format!("Inject has incompatible types: inj {:?} = {:?} as {:?}", tau_e, d, tau)),
-        //     }
-        // ),
+        // 5. sum types
+        Expr::Inject { e, d } => {
+            let (tau_e, c_e) = type_check_expr(e, ctx)?;
+            let tau_other = fresh_type_var();
+            let tau_full = match d {
+                Direction::Left => Type::Sum {
+                    left: Box::new(tau_e.clone()),
+                    right: Box::new(tau_other.clone()),
+                },
+                Direction::Right => Type::Sum {
+                    left: Box::new(tau_other.clone()),
+                    right: Box::new(tau_e.clone()),
+                },
+            };
+            Ok((tau_full, c_e))
+        }
+        Expr::Case {
+            e,
+            xleft,
+            eleft,
+            xright,
+            eright,
+        } => {
+            let (tau_sum, c_sum) = type_check_expr(e, ctx)?;
+            let tau_l = fresh_type_var();
+            let tau_r = fresh_type_var();
+
+            ctx.insert(xleft.clone(), tau_l);
+            let (tau_l_after, c_l) = type_check_expr(eleft, ctx)?;
+            let tau_l = ctx.remove(xleft).unwrap();
+            ctx.insert(xright.clone(), tau_r);
+            let (tau_r_after, c_r) = type_check_expr(eright, ctx)?;
+            let tau_r = ctx.remove(xright).unwrap();
+
+            let constraints = flat!(vec![
+                c_sum,
+                c_l,
+                c_r,
+                vec![
+                    (
+                        tau_sum,
+                        Type::Sum {
+                            left: Box::new(tau_l.clone()),
+                            right: Box::new(tau_r.clone())
+                        }
+                    ),
+                    (tau_l_after.clone(), tau_r_after)
+                ]
+            ]);
+            Ok((tau_l_after, constraints))
+        }
         // Expr::Case {
         //     e,
         //     xleft,

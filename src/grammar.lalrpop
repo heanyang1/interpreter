@@ -79,7 +79,7 @@ Case: Box<Expr> = {
 
 Inject: Box<Expr> = {
     <e:Project> => e,
-    "inj" <e:Project> "=" <d:Direction> "as" <tau:Type> => Box::new(Expr::Inject { e, d, tau }),
+    "inj" <e:Project> "=" <d:Direction> => Box::new(Expr::Inject { e, d }),
 };
 
 Project: Box<Expr> = {

@@ -36,19 +36,16 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn adt() {
         let proj = parse("1.L").unwrap();
         assert!(type_check(&proj).is_err());
-        let inj = parse("inj ()=L as num+num").unwrap();
+        let inj = parse("inj ()=L").unwrap();
         assert!(type_check(&inj).is_err());
         let case = parse("case () {L(l)->l+1|R(r)->3*r}").unwrap();
         assert!(type_check(&case).is_err());
-        let case_arm = parse("case (inj 1=L as num+(num*num)) {L(l)->l+1|R(r)->3*r}").unwrap();
-        assert!(type_check(&case_arm).is_err());
         let mul = parse("1*(1,2)").unwrap();
         assert!(type_check(&mul).is_err());
-        let div = parse("(inj 1=L as num+num)/1").unwrap();
+        let div = parse("(inj 1=L)/1").unwrap();
         assert!(type_check(&div).is_err());
         let lt = parse("1<(2,3)").unwrap();
         assert!(type_check(&lt).is_err());

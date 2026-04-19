@@ -161,7 +161,6 @@ pub enum Expr {
     Inject {
         e: Box<Expr>,
         d: Direction,
-        tau: Box<Type>,
     },
     Case {
         e: Box<Expr>,
