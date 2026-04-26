@@ -8,11 +8,22 @@ mod tests {
     use interpreter::typecheck::type_check;
 
     #[test]
-    #[ignore]
+    fn eval_test_desugar() {
+        let fact = parse(
+            r#"
+            (fun fact -> fact 5) (fix fact -> (fun n -> if n == 0 then 1 else n * (fact (n - 1))))
+            "#,
+        )
+        .unwrap();
+        assert_eq!(eval(&fact, Mode::Eval, OutputMode::Full), Expr::Num(120));
+        assert_eq!(type_check(&fact).unwrap(), Type::Num);
+    }
+
+    #[test]
     fn eval_test() {
         let fact = parse(
             r#"
-            letrec fact : num -> num = fun (n : num) ->
+            letrec fact = fun n ->
               if n == 0 then 1 else n * (fact (n - 1))
             in
               fact 5
@@ -24,11 +35,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn aequiv() {
         let fact = parse(
             r#"
-            letrec fact : num -> num = fun (n : num) ->
+            letrec fact = fun n ->
               if n == 0 then 1 else n * (fact (n - 1))
             in
               fact 5

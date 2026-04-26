@@ -1,18 +1,38 @@
 use std::collections::{HashMap, VecDeque};
+use std::fmt::Display;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static VAR_ID: AtomicU32 = AtomicU32::new(0);
 
-use crate::ast_util::Symbol;
+use crate::ast_util::{Printer, Symbol};
 use crate::{ast::*, union_find::UnionFind};
 
-type Constraint = Vec<(Type, Type)>;
+struct Constraint {
+    /// The type on the left.
+    type_l: Type,
+    /// The type on the right.
+    type_r: Type,
+    /// A string that represents the left type for debug purpose.
+    expr_l: String,
+    /// A string that represents the right type for debug purpose.
+    expr_r: String,
+}
+
+impl Display for Constraint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}: {} = {}: {}",
+            self.expr_l, self.type_l, self.expr_r, self.type_r
+        )
+    }
+}
 
 pub fn type_check(ast: &Expr) -> Result<Type, String> {
-    let mut ctx = HashMap::new();
-    let (cur_type, constraints) = type_check_expr(ast, &mut ctx)?;
+    let mut ctx = vec![];
+    let ast = ast.clone().to_debruijn();
+    let (cur_type, constraints) = type_check_expr(&ast, &mut ctx)?;
     assert!(ctx.is_empty());
-    println!("{cur_type}, {constraints:?}");
     let (mut uf, map) = unification(constraints)?;
     get_type(cur_type, &mut uf, &map)
 }
@@ -41,26 +61,43 @@ fn all_type_vars(tau: &Type) -> Vec<Variable> {
 }
 
 fn unification(
-    constraint: Constraint,
+    constraints: Vec<Constraint>,
 ) -> Result<(UnionFind<Variable>, HashMap<Variable, Type>), String> {
-    let variables: Vec<Variable> = constraint
+    let variables: Vec<Variable> = constraints
         .iter()
-        .flat_map(|(x, y)| vec![x, y])
+        .flat_map(|c| vec![&c.type_l, &c.type_r])
         .flat_map(all_type_vars)
         .collect();
     let mut uf = UnionFind::new(variables);
-    let mut map = HashMap::new();
-    let mut constraint = VecDeque::from(constraint);
-    while !constraint.is_empty() {
-        match constraint.pop_front().unwrap() {
+    let mut map: HashMap<Variable, Type> = HashMap::new();
+    let mut constraints = VecDeque::from(constraints);
+    while !constraints.is_empty() {
+        let constraint = constraints.pop_front().unwrap();
+        match (constraint.type_l, constraint.type_r) {
             (Type::Bool, Type::Bool) | (Type::Num, Type::Num) | (Type::Unit, Type::Unit) => (),
             (Type::Var(l), Type::Var(r)) => {
                 uf.union(&l, &r).unwrap();
+                match (map.get(&l), map.get(&r)) {
+                    (Some(lval), Some(rval)) => {
+                        constraints.push_back(Constraint {
+                            type_l: lval.clone(),
+                            type_r: rval.clone(),
+                            expr_l: format!("val({})", l),
+                            expr_r: format!("val({})", r),
+                        });
+                    }
+                    _ => (),
+                }
             }
             (Type::Var(var), val) | (val, Type::Var(var)) => match map.insert(var, val.clone()) {
                 None => (),
                 Some(old_val) => {
-                    constraint.push_back((old_val, val));
+                    constraints.push_back(Constraint {
+                        type_l: old_val,
+                        type_r: val,
+                        expr_l: constraint.expr_l,
+                        expr_r: constraint.expr_r,
+                    });
                 }
             },
             (
@@ -73,7 +110,23 @@ fn unification(
                     ret: ret_r,
                 },
             ) => {
-                constraint.extend(vec![(*arg_l, *arg_r), (*ret_l, *ret_r)].into_iter());
+                constraints.extend(
+                    vec![
+                        Constraint {
+                            type_l: *arg_l,
+                            type_r: *arg_r,
+                            expr_l: format!("arg({})", constraint.expr_l),
+                            expr_r: format!("arg({})", constraint.expr_r),
+                        },
+                        Constraint {
+                            type_l: *ret_l,
+                            type_r: *ret_r,
+                            expr_l: format!("ret({})", constraint.expr_l),
+                            expr_r: format!("ret({})", constraint.expr_r),
+                        },
+                    ]
+                    .into_iter(),
+                );
             }
             (
                 Type::Product {
@@ -95,7 +148,23 @@ fn unification(
                     right: r_2,
                 },
             ) => {
-                constraint.extend(vec![(*l_1, *l_2), (*r_1, *r_2)].into_iter());
+                constraints.extend(
+                    vec![
+                        Constraint {
+                            type_l: *l_1,
+                            type_r: *l_2,
+                            expr_l: format!("({}).L", constraint.expr_l),
+                            expr_r: format!("({}).L", constraint.expr_r),
+                        },
+                        Constraint {
+                            type_l: *r_1,
+                            type_r: *r_2,
+                            expr_l: format!("({}).R", constraint.expr_l),
+                            expr_r: format!("({}).R", constraint.expr_r),
+                        },
+                    ]
+                    .into_iter(),
+                );
             }
             (lhs, rhs) => return Err(format!("Unification failed with type {lhs} and {rhs}")),
         }
@@ -156,10 +225,7 @@ fn get_type(
 }
 
 // TODO: Change its name to get_constraints after we have finish every cases
-fn type_check_expr(
-    ast: &Expr,
-    ctx: &mut HashMap<Variable, Type>,
-) -> Result<(Type, Constraint), String> {
+fn type_check_expr(ast: &Expr, ctx: &mut Vec<Type>) -> Result<(Type, Vec<Constraint>), String> {
     match ast {
         // 1. arithmetic
         Expr::Num(_) => Ok((Type::Num, vec![])),
@@ -169,7 +235,20 @@ fn type_check_expr(
             let constraints = flat!(vec![
                 c_left,
                 c_right,
-                vec![(tau_left, Type::Num), (tau_right, Type::Num)],
+                vec![
+                    Constraint {
+                        type_l: tau_left,
+                        type_r: Type::Num,
+                        expr_l: left.to_string(),
+                        expr_r: "Num".to_string()
+                    },
+                    Constraint {
+                        type_l: tau_right,
+                        type_r: Type::Num,
+                        expr_l: right.to_string(),
+                        expr_r: "Num".to_string()
+                    },
+                ]
             ]);
             Ok((Type::Num, constraints))
         }
@@ -181,7 +260,20 @@ fn type_check_expr(
             let constraints = flat!(vec![
                 c_left,
                 c_right,
-                vec![(tau_left, Type::Num), (tau_right, Type::Num)],
+                vec![
+                    Constraint {
+                        type_l: tau_left,
+                        type_r: Type::Num,
+                        expr_l: left.to_string(),
+                        expr_r: "Num".to_string()
+                    },
+                    Constraint {
+                        type_l: tau_right,
+                        type_r: Type::Num,
+                        expr_l: right.to_string(),
+                        expr_r: "Num".to_string()
+                    },
+                ]
             ]);
             Ok((Type::Bool, constraints))
         }
@@ -193,7 +285,20 @@ fn type_check_expr(
                 c_cond,
                 c_then,
                 c_else,
-                vec![(tau_cond, Type::Bool), (tau_then.clone(), tau_else)],
+                vec![
+                    Constraint {
+                        type_l: tau_cond,
+                        type_r: Type::Bool,
+                        expr_l: cond.to_string(),
+                        expr_r: "Bool".to_string()
+                    },
+                    Constraint {
+                        type_l: tau_then.clone(),
+                        type_r: tau_else,
+                        expr_l: then_.to_string(),
+                        expr_r: else_.to_string()
+                    },
+                ]
             ]);
             Ok((tau_then, constraints))
         }
@@ -203,20 +308,34 @@ fn type_check_expr(
             let constraints = flat!(vec![
                 c_left,
                 c_right,
-                vec![(tau_left, Type::Bool), (tau_right, Type::Bool)],
+                vec![
+                    Constraint {
+                        type_l: tau_left,
+                        type_r: Type::Bool,
+                        expr_l: left.to_string(),
+                        expr_r: "Bool".to_string()
+                    },
+                    Constraint {
+                        type_l: tau_right,
+                        type_r: Type::Bool,
+                        expr_l: right.to_string(),
+                        expr_r: "Bool".to_string()
+                    },
+                ]
             ]);
             Ok((Type::Bool, constraints))
         }
         // 3. functions
-        Expr::Var(x) => match ctx.get(x) {
-            Some(tau) => Ok((tau.clone(), vec![])),
-            None => Err(format!("Free variable: {x}")),
-        },
+        Expr::Var(x) => Err(format!("Free variable: {x}")),
+        Expr::DeBruijn(depth) => Ok((
+            ctx.iter().rev().skip(*depth).next().unwrap().clone(),
+            vec![],
+        )),
         Expr::Lam { x, e } => {
             let tau = fresh_type_var();
-            ctx.insert(x.clone(), tau.clone());
+            ctx.push(tau);
             let (tau_ret, c_ret) = type_check_expr(e, ctx)?;
-            ctx.remove(x);
+            let tau = ctx.pop().unwrap();
             Ok((
                 Type::Fn {
                     arg: Box::new(tau),
@@ -232,13 +351,15 @@ fn type_check_expr(
             let constraints = flat!(vec![
                 c_lam,
                 c_arg,
-                vec![(
-                    tau_lam,
-                    Type::Fn {
+                vec![Constraint {
+                    type_l: tau_lam,
+                    expr_r: format!("{} → {}", tau_arg, tau_ret),
+                    type_r: Type::Fn {
                         arg: Box::new(tau_arg),
                         ret: Box::new(tau_ret.clone()),
                     },
-                )],
+                    expr_l: lam.to_string()
+                }]
             ]);
             Ok((tau_ret, constraints))
         }
@@ -261,13 +382,15 @@ fn type_check_expr(
             let tau_r = fresh_type_var();
             let constraints = flat!(vec![
                 c_e,
-                vec![(
-                    tau_e,
-                    Type::Product {
+                vec![Constraint {
+                    type_l: tau_e,
+                    expr_r: format!("({} * {})", tau_l, tau_r),
+                    type_r: Type::Product {
                         left: Box::new(tau_l.clone()),
-                        right: Box::new(tau_r.clone())
-                    }
-                )]
+                        right: Box::new(tau_r.clone()),
+                    },
+                    expr_l: e.to_string()
+                }]
             ]);
             let tau_ret = match d {
                 Direction::Left => tau_l,
@@ -303,59 +426,54 @@ fn type_check_expr(
             let tau_l = fresh_type_var();
             let tau_r = fresh_type_var();
 
-            ctx.insert(xleft.clone(), tau_l);
+            ctx.push(tau_l);
             let (tau_l_after, c_l) = type_check_expr(eleft, ctx)?;
-            let tau_l = ctx.remove(xleft).unwrap();
-            ctx.insert(xright.clone(), tau_r);
+            let tau_l = ctx.pop().unwrap();
+            ctx.push(tau_r);
             let (tau_r_after, c_r) = type_check_expr(eright, ctx)?;
-            let tau_r = ctx.remove(xright).unwrap();
+            let tau_r = ctx.pop().unwrap();
 
             let constraints = flat!(vec![
                 c_sum,
                 c_l,
                 c_r,
                 vec![
-                    (
-                        tau_sum,
-                        Type::Sum {
+                    Constraint {
+                        type_l: tau_sum,
+                        expr_r: format!("({}+{})", tau_l, tau_r),
+                        type_r: Type::Sum {
                             left: Box::new(tau_l.clone()),
-                            right: Box::new(tau_r.clone())
-                        }
-                    ),
-                    (tau_l_after.clone(), tau_r_after)
+                            right: Box::new(tau_r.clone()),
+                        },
+                        expr_l: e.to_string()
+                    },
+                    Constraint {
+                        type_l: tau_l_after.clone(),
+                        type_r: tau_r_after,
+                        expr_l: eleft.to_string(),
+                        expr_r: eright.to_string()
+                    },
                 ]
             ]);
             Ok((tau_l_after, constraints))
         }
-        // Expr::Case {
-        //     e,
-        //     xleft,
-        //     eleft,
-        //     xright,
-        //     eright,
-        // } => do_!(
-        //     type_check_expr(e, ctx.clone()) => tau_e,
-        //     match tau_e {
-        //         Type::Sum { left, right } => Ok((*left, *right)),
-        //         _ => Err(format!("Case expression should be a sum type; found {:?}", tau_e)),
-        //     } => (tau_xleft, tau_xright),
-        //     {
-        //         let mut ctx = ctx.clone();
-        //         ctx.insert(xleft.clone(), tau_xleft);
-        //         type_check_expr(eleft, ctx)
-        //     } => tau_eleft,
-        //     {
-        //         let mut ctx = ctx;
-        //         ctx.insert(xright.clone(), tau_xright);
-        //         type_check_expr(eright, ctx)
-        //     } => tau_eright,
-        //     if Type::alpha_equiv(tau_eleft.clone(), tau_eright.clone()) {
-        //         Ok(tau_eleft)
-        //     } else {
-        //         type_mismatch!(tau_eleft, tau_eright, "case")
-        //     }
-        // ),
-        // // 6. fixpoints
+        // 6. fixpoints
+        Expr::Fix { x, e } => {
+            let tau_x = fresh_type_var();
+            ctx.push(tau_x);
+            let (tau_e, c_e) = type_check_expr(e, ctx)?;
+            let tau_x = ctx.pop().unwrap();
+            let constraints = flat!(vec![
+                c_e,
+                vec![Constraint {
+                    type_l: tau_x.clone(),
+                    type_r: tau_e,
+                    expr_l: x.to_string(),
+                    expr_r: e.to_string()
+                }]
+            ]);
+            Ok((tau_x, constraints))
+        }
         // Expr::Fix { x, tau, e } => do_!(
         //     {
         //         let mut ctx = ctx;

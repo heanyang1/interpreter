@@ -8,11 +8,10 @@ pub Expr: Box<Expr> = {
 
 LetRec: Box<Expr> = {
     <e:Let> => e,
-    "letrec" <x:Variable> ":" <tau:Type> "=" <evar:LetRec> "in" <ebody:LetRec> => {
+    "letrec" <x:Variable> "=" <evar:LetRec> "in" <ebody:LetRec> => {
         let xclone = x.clone();
-        let tauclone = tau.clone();
         let lam = Box::new(Expr::Lam { x: xclone, e: ebody });
-        let arg = Box::new(Expr::Fix { x, tau, e: evar });
+        let arg = Box::new(Expr::Fix { x, e: evar });
         Box::new(Expr::App { lam, arg })
     }
 };
@@ -34,7 +33,7 @@ Func: Box<Expr> = {
 
 Fix: Box<Expr> = {
     <e:App> => e,
-    "fix" "(" <x:Variable> ":" <tau:Type> ")" "->" <e:Fix> => Box::new(Expr::Fix { x, tau, e }),
+    "fix" <x:Variable> "->" <e:Fix> => Box::new(Expr::Fix { x, e }),
 };
 
 App: Box<Expr> = {

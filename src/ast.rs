@@ -3,15 +3,13 @@ use std::fmt::Display;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Variable(pub String);
 
-impl From<&str> for Variable
-{
+impl From<&str> for Variable {
     fn from(value: &str) -> Self {
         Variable(value.to_string())
     }
 }
 
-impl From<String> for Variable
-{
+impl From<String> for Variable {
     fn from(value: String) -> Self {
         Variable(value)
     }
@@ -43,13 +41,13 @@ impl std::fmt::Display for Type {
             Type::Num => write!(f, "num"),
             Type::Bool => write!(f, "bool"),
             Type::Unit => write!(f, "()"),
-            Type::Var(v) => write!(f, "{}", v.0),
+            Type::Var(v) => write!(f, "{}", v),
             Type::Fn { arg, ret } => write!(f, "{} → {}", arg, ret),
             Type::Product { left, right } => write!(f, "{} * {}", left, right),
             Type::Sum { left, right } => write!(f, "{} + {}", left, right),
-            Type::Rec { a, tau } => write!(f, "μ {} . {}", a.0, tau),
-            Type::Forall { a, tau } => write!(f, "∀ {} . {}", a.0, tau),
-            Type::Exists { a, tau } => write!(f, "∃ {} . {}", a.0, tau),
+            Type::Rec { a, tau } => write!(f, "μ {} . {}", a, tau),
+            Type::Forall { a, tau } => write!(f, "∀ {} . {}", a, tau),
+            Type::Exists { a, tau } => write!(f, "∃ {} . {}", a, tau),
         }
     }
 }
@@ -141,6 +139,7 @@ pub enum Expr {
         right: Box<Expr>,
     },
     Var(Variable),
+    DeBruijn(usize),
     Lam {
         x: Variable,
         e: Box<Expr>,
@@ -171,7 +170,6 @@ pub enum Expr {
     },
     Fix {
         x: Variable,
-        tau: Box<Type>,
         e: Box<Expr>,
     },
     TyLam {
@@ -203,7 +201,8 @@ pub enum Expr {
 impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expr::Var(v) => write!(f, "{}", v.0),
+            Expr::Var(v) => write!(f, "{}", v),
+            Expr::DeBruijn(d) => write!(f, "<{}>", d),
             Expr::Num(n) => write!(f, "{}", n),
             Expr::True => write!(f, "true"),
             Expr::False => write!(f, "false"),
@@ -211,7 +210,7 @@ impl Display for Expr {
             Expr::Addop { binop, left, right } => write!(f, "({} {} {})", left, binop, right),
             Expr::Mulop { binop, left, right } => write!(f, "({} {} {})", left, binop, right),
             Expr::If { cond, then_, else_ } => {
-                write!(f, "if {} then {} else {}", cond, then_, else_)
+                write!(f, "(if {} then {} else {})", cond, then_, else_)
             }
             Expr::Relop { relop, left, right } => write!(f, "({} {} {})", left, relop, right),
             Expr::And { left, right } => write!(f, "({} && {})", left, right),
@@ -231,27 +230,27 @@ impl Display for Expr {
                 eright,
             } => write!(
                 f,
-                "case {} of L({}) -> {} | R({}) -> {}",
-                e, xleft.0, eleft, xright.0, eright
+                "(case {} of L({}) -> {} | R({}) -> {})",
+                e, xleft, eleft, xright, eright
             ),
             Expr::App { lam, arg } => write!(f, "({} {})", lam, arg),
-            Expr::Lam { x, e } => write!(f, "λ {} -> {}", x.0, e),
-            Expr::TyLam { a, e } => write!(f, "Λ {} -> {}", a.0, e),
+            Expr::Lam { x, e } => write!(f, "(λ {} -> {})", x, e),
+            Expr::TyLam { a, e } => write!(f, "(Λ {} -> {})", a, e),
             Expr::TyApp { e, tau } => write!(f, "({} {})", e, tau),
-            Expr::Fix { x, tau, e } => write!(f, "fix ({} : {}) -> {}", x.0, tau, e),
-            Expr::Fold { e, .. } => write!(f, "fold {} as ...", e),
-            Expr::Unfold(e) => write!(f, "unfold {}", e),
+            Expr::Fix { x, e } => write!(f, "(fix {} -> {})", x, e),
+            Expr::Fold { e, .. } => write!(f, "(fold {} as ...)", e),
+            Expr::Unfold(e) => write!(f, "(unfold {})", e),
             Expr::Export {
                 e,
                 tau_adt,
                 tau_mod,
-            } => write!(f, "export {} without {} as {}", e, tau_adt, tau_mod),
+            } => write!(f, "(export {} without {} as {})", e, tau_adt, tau_mod),
             Expr::Import {
                 x,
                 a,
                 e_mod,
                 e_body,
-            } => write!(f, "import ({}, {}) = {} in {}", x.0, a.0, e_mod, e_body),
+            } => write!(f, "(import ({}, {}) = {} in {})", x, a, e_mod, e_body),
         }
     }
 }

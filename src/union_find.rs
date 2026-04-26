@@ -5,6 +5,8 @@ use std::{
     hash::Hash,
 };
 
+use crate::ast_util::Printer;
+
 pub struct UnionFind<T>
 where
     T: Hash + Eq + Clone + Display,
@@ -74,6 +76,19 @@ where
 
     pub fn connected(&mut self, x: &T, y: &T) -> Result<bool, String> {
         Ok(self.find_with_id(self.get_idx(x)?) == self.find_with_id(self.get_idx(y)?))
+    }
+}
+
+impl<T> Display for UnionFind<T>
+where
+    T: Hash + Eq + Clone + Display + std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "UnionFind {{")?;
+        writeln!(f, "  elements: {}", Printer(", ").print_map(&self.elem_index))?;
+        writeln!(f, "  parent: {}", Printer(", ").print_it(self.parent.iter()))?;
+        writeln!(f, "  rank: {}", Printer(", ").print_it(self.rank.iter()))?;
+        write!(f, "}}")
     }
 }
 
@@ -167,5 +182,59 @@ mod tests {
         uf.rank[2] = 1;
         uf.union(&0, &1).unwrap();
         assert_eq!(uf.parent[2], 0);
+    }
+
+    #[test]
+    fn test_display() {
+        let elems = vec![0u32, 1, 2];
+        let uf = UnionFind::new(elems);
+        let s = format!("{}", uf);
+        assert!(s.contains("UnionFind"));
+        assert!(s.contains("elements"));
+        assert!(s.contains("parent"));
+        assert!(s.contains("rank"));
+    }
+
+    #[test]
+    fn test_display_after_union() {
+        let elems = vec![0u32, 1, 2, 3];
+        let mut uf = UnionFind::new(elems);
+        uf.union(&0, &1).unwrap();
+        uf.union(&2, &3).unwrap();
+        let s = format!("{}", uf);
+        println!("{s}");
+        assert!(s.contains("parent: [0, 0, 2, 2]"));
+        assert!(s.contains("rank: [1, 0, 1, 0]"));
+    }
+
+    #[test]
+    fn test_display_with_path_compression() {
+        let elems = vec![0u32, 1, 2, 3];
+        let mut uf = UnionFind::new(elems);
+        uf.union(&0, &1).unwrap();
+        uf.union(&1, &2).unwrap();
+        uf.union(&2, &3).unwrap();
+        let _ = uf.find(&0).unwrap();
+        let s = format!("{}", uf);
+        assert!(s.contains("parent: [0, 0, 0, 0]"));
+    }
+
+    #[test]
+    fn test_display_rank_after_union() {
+        let elems = vec![0u32, 1, 2];
+        let mut uf = UnionFind::new(elems);
+        uf.union(&0, &1).unwrap();
+        let s = format!("{}", uf);
+        assert!(s.contains("rank: [1, 0, 0]"));
+    }
+
+    #[test]
+    fn test_display_empty() {
+        let elems: Vec<u32> = vec![];
+        let uf = UnionFind::new(elems);
+        let s = format!("{}", uf);
+        assert!(s.contains("elements: []"));
+        assert!(s.contains("parent: []"));
+        assert!(s.contains("rank: []"));
     }
 }

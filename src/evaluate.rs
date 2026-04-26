@@ -77,6 +77,7 @@ pub fn eval(e: &Expr, mode: Mode, output: OutputMode) -> Expr {
 
 pub fn try_step(expr: &Expr) -> Outcome {
     match expr {
+        Expr::DeBruijn(_) => todo!("Use de Bruijn indices instead of rewriting"),
         Expr::Lam { .. }
         | Expr::Num { .. }
         | Expr::True

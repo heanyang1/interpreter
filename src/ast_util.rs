@@ -1,12 +1,24 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::ast::{Expr, Type, Variable};
+
+pub struct Printer(pub &'static str);
+
+impl Printer {
+    pub fn print_it<T: Display, It: Iterator<Item = T>>(&self, v: It) -> String {
+        let elems: Vec<String> = v.map(|x| format!("{}", x)).collect();
+        format!("[{}]", elems.join(self.0))
+    }
+    pub fn print_map<K: Display, V: Display>(&self, m: &HashMap<K, V>) -> String {
+        self.print_it(m.iter().map(|(x, y)| format!("{x}: {y}")))
+    }
+}
 
 fn fresh(v: &Variable) -> Variable {
     Variable::from(format!("{}_", v.0))
 }
 
-fn add_depth<I>(depth: HashMap<Variable, u32>, it: I) -> HashMap<Variable, u32>
+fn add_depth<I>(depth: HashMap<Variable, usize>, it: I) -> HashMap<Variable, usize>
 where
     I: IntoIterator<Item = Variable>,
 {
@@ -14,7 +26,7 @@ where
     for (_, v) in depth.iter_mut() {
         *v += 1;
     }
-    depth.extend(it.into_iter().map(|v| (v.clone(), 0_u32)));
+    depth.extend(it.into_iter().map(|v| (v.clone(), 0)));
     depth
 }
 
@@ -31,7 +43,7 @@ macro_rules! trivial {
 }
 
 pub trait Symbol: Sized {
-    fn to_debruijn_map(self, depth: HashMap<Variable, u32>) -> Self;
+    fn to_debruijn_map(self, depth: HashMap<Variable, usize>) -> Self;
     fn to_debruijn(self) -> Self {
         self.to_debruijn_map(HashMap::new())
     }
@@ -43,7 +55,7 @@ pub trait Symbol: Sized {
 }
 
 impl Symbol for Type {
-    fn to_debruijn_map(self, depth: HashMap<Variable, u32>) -> Self {
+    fn to_debruijn_map(self, depth: HashMap<Variable, usize>) -> Self {
         match self {
             Type::Num | Type::Bool | Type::Unit => self,
             Type::Product { left, right } => {
@@ -127,13 +139,14 @@ impl Symbol for Type {
 }
 
 impl Symbol for Expr {
-    fn to_debruijn_map(self, depth: HashMap<Variable, u32>) -> Self {
+    fn to_debruijn_map(self, depth: HashMap<Variable, usize>) -> Self {
         match self {
+            Expr::DeBruijn(_) => unreachable!(),
             Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => self.clone(),
-            Expr::Var(v) => Expr::Var(match depth.get(&v) {
-                None => v.clone(), // v is a free variable
-                Some(depth) => Variable::from(depth.to_string()),
-            }),
+            Expr::Var(v) => match depth.get(&v) {
+                None => Self::Var(v.clone()), // v is a free variable
+                Some(depth) => Self::DeBruijn(*depth),
+            },
             Expr::Lam { x, e } => {
                 let depth = add_depth(depth, [x.clone()]);
                 Expr::Lam {
@@ -179,11 +192,10 @@ impl Symbol for Expr {
                     eright: Box::new(eright.to_debruijn_map(depth_new)),
                 }
             }
-            Expr::Fix { x, tau, e } => {
+            Expr::Fix { x, e } => {
                 let depth = add_depth(depth, [x]);
                 Expr::Fix {
                     x: Variable::from("_"),
-                    tau: Box::new(tau.to_debruijn_map(depth.clone())),
                     e: Box::new(e.to_debruijn_map(depth)),
                 }
             }
@@ -225,7 +237,9 @@ impl Symbol for Expr {
 
     fn substitute_map(self, rename: HashMap<Variable, Expr>) -> Expr {
         match self {
-            Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => self.clone(),
+            Expr::Num(_) | Expr::True | Expr::False | Expr::Unit | Expr::DeBruijn(_) => {
+                self.clone()
+            }
             Expr::Addop { binop, left, right } => {
                 trivial!(Expr, Addop, rename, substitute_map; binop; left, right;)
             }
@@ -283,13 +297,12 @@ impl Symbol for Expr {
                     eright: Box::new(eright.substitute_map(rename)),
                 }
             }
-            Expr::Fix { x, tau, e } => {
+            Expr::Fix { x, e } => {
                 let mut rename = rename;
                 let new_x = fresh(&x);
                 rename.insert(x, Expr::Var(new_x.clone()));
                 Expr::Fix {
                     x: new_x,
-                    tau,
                     e: Box::new(e.substitute_map(rename)),
                 }
             }
@@ -331,5 +344,66 @@ impl Symbol for Expr {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{Expr, Type};
+
+    #[test]
+    fn test_expr_vec_print_empty() {
+        let v: Vec<Expr> = vec![];
+        let s = Printer("").print_it(v.iter());
+        assert_eq!(s, "[]");
+    }
+
+    #[test]
+    fn test_expr_vec_print_single() {
+        let v = vec![Expr::Num(42)];
+        let s = Printer("").print_it(v.iter());
+        assert_eq!(s, "[42]");
+    }
+
+    #[test]
+    fn test_expr_vec_print_multiple() {
+        let v = vec![Expr::Num(1), Expr::Num(2), Expr::Num(3)];
+        let s = Printer(", ").print_it(v.iter());
+        assert_eq!(s, "[1, 2, 3]");
+    }
+
+    #[test]
+    fn test_type_vec_print_empty() {
+        let v: Vec<Type> = vec![];
+        let s = Printer("").print_it(v.iter());
+        assert_eq!(s, "[]");
+    }
+
+    #[test]
+    fn test_type_vec_print_single() {
+        let v = vec![Type::Num];
+        let s = Printer(", ").print_it(v.iter());
+        assert_eq!(s, "[num]");
+    }
+
+    #[test]
+    fn test_type_vec_print_multiple() {
+        let v = vec![Type::Num, Type::Bool, Type::Unit];
+        let s = Printer(", ").print_it(v.iter());
+        assert_eq!(s, "[num, bool, ()]");
+    }
+
+    #[test]
+    fn test_type_vec_print_complex() {
+        let v = vec![
+            Type::Num,
+            Type::Fn {
+                arg: Box::new(Type::Bool),
+                ret: Box::new(Type::Num),
+            },
+        ];
+        let s = Printer("|").print_it(v.iter());
+        assert_eq!(s, "[num|bool → num]");
     }
 }
