@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Display;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -28,13 +28,37 @@ impl Display for Constraint {
     }
 }
 
-pub fn type_check(ast: &Expr) -> Result<Type, String> {
+fn type_check_with_free_vars(ast: &Expr) -> Result<Type, String> {
     let mut ctx = vec![];
     let ast = ast.clone().to_debruijn();
+    // println!("{ast}");
     let (cur_type, constraints) = type_check_expr(&ast, &mut ctx)?;
+    // println!(
+    //     "ty: {cur_type}, {}",
+    //     Printer(" ").print_it(constraints.iter())
+    // );
+    // println!("-----------");
     assert!(ctx.is_empty());
     let (mut uf, map) = unification(constraints)?;
-    get_type(cur_type, &mut uf, &map)
+    Ok(get_type(cur_type, &mut uf, &map))
+}
+
+pub fn type_check(ast: &Expr) -> Result<Type, String> {
+    let ty = type_check_with_free_vars(ast)?;
+    let all_vars_set = HashSet::<_>::from_iter(all_type_vars(&ty));
+    let scoped_vars_set = HashSet::<_>::from_iter(scoped_type_vars(&ty));
+    // println!("{}", Printer(", ").print_it(all_vars_set.iter()));
+    // println!("{}", Printer(", ").print_it(scoped_vars_set.iter()));
+    // println!("-----------");
+    let free_vars: Vec<_> = all_vars_set.difference(&scoped_vars_set).collect();
+    if free_vars.is_empty() {
+        Ok(ty)
+    } else {
+        Err(format!(
+            "Free variable: {}",
+            Printer(", ").print_it(free_vars.iter())
+        ))
+    }
 }
 
 fn fresh_type_var() -> Type {
@@ -46,6 +70,18 @@ macro_rules! flat {
     ($vec:expr) => {
         $vec.into_iter().flatten().collect()
     };
+}
+
+fn scoped_type_vars(tau: &Type) -> Vec<Variable> {
+    match tau {
+        Type::Bool | Type::Num | Type::Unit | Type::Var(_) => vec![],
+        Type::Fn { arg, ret } => flat!(vec![scoped_type_vars(arg), scoped_type_vars(ret)]),
+        Type::Product { left, right } | Type::Sum { left, right } => {
+            flat!(vec![scoped_type_vars(left), scoped_type_vars(right)])
+        }
+        Type::Forall { a, tau } => flat!(vec![vec![a.clone()], scoped_type_vars(tau)]),
+        _ => todo!(),
+    }
 }
 
 fn all_type_vars(tau: &Type) -> Vec<Variable> {
@@ -180,38 +216,33 @@ fn get_type_var(
     tau: Variable,
     uf: &mut UnionFind<Variable>,
     map: &HashMap<Variable, Type>,
-) -> Result<Type, String> {
-    let root = uf.find(&tau).map_err(|_| format!("Free variable {tau}"))?;
-    let result = match map.get(root) {
+) -> Type {
+    let result = match uf.find(&tau).ok().and_then(|x| map.get(x)) {
         Some(r) => r,
-        None => return Err(format!("Free variable {root}")),
+        None => return Type::Var(tau),
     };
     let mut var_to_type = HashMap::new();
     for v in all_type_vars(result).iter() {
-        let ty = get_type_var(v.clone(), uf, map)?;
+        let ty = get_type_var(v.clone(), uf, map);
         var_to_type.insert(v.clone(), ty);
     }
-    Ok(result.clone().substitute_map(var_to_type))
+    result.clone().substitute_map(var_to_type)
 }
 
 macro_rules! trivial_get_type {
     ($arm:tt, $x:ident, $y:ident, $uf:ident, $map:ident) => {{
-        let tx = get_type(*$x, $uf, $map)?;
-        let ty = get_type(*$y, $uf, $map)?;
-        Ok(Type::$arm {
+        let tx = get_type(*$x, $uf, $map);
+        let ty = get_type(*$y, $uf, $map);
+        Type::$arm {
             $x: Box::new(tx),
             $y: Box::new(ty),
-        })
+        }
     }};
 }
 
-fn get_type(
-    tau: Type,
-    uf: &mut UnionFind<Variable>,
-    map: &HashMap<Variable, Type>,
-) -> Result<Type, String> {
+fn get_type(tau: Type, uf: &mut UnionFind<Variable>, map: &HashMap<Variable, Type>) -> Type {
     match tau {
-        Type::Bool | Type::Num | Type::Unit => Ok(tau),
+        Type::Bool | Type::Num | Type::Unit => tau,
         Type::Var(x) => get_type_var(x, uf, map),
         Type::Fn { arg, ret } => trivial_get_type!(Fn, arg, ret, uf, map),
         Type::Product { left, right } => {
@@ -331,7 +362,7 @@ fn type_check_expr(ast: &Expr, ctx: &mut Vec<Type>) -> Result<(Type, Vec<Constra
             ctx.iter().rev().skip(*depth).next().unwrap().clone(),
             vec![],
         )),
-        Expr::Lam { x, e } => {
+        Expr::Lam { x: _, e } => {
             let tau = fresh_type_var();
             ctx.push(tau);
             let (tau_ret, c_ret) = type_check_expr(e, ctx)?;
@@ -417,9 +448,9 @@ fn type_check_expr(ast: &Expr, ctx: &mut Vec<Type>) -> Result<(Type, Vec<Constra
         }
         Expr::Case {
             e,
-            xleft,
+            xleft: _,
             eleft,
-            xright,
+            xright: _,
             eright,
         } => {
             let (tau_sum, c_sum) = type_check_expr(e, ctx)?;
@@ -474,18 +505,6 @@ fn type_check_expr(ast: &Expr, ctx: &mut Vec<Type>) -> Result<(Type, Vec<Constra
             ]);
             Ok((tau_x, constraints))
         }
-        // Expr::Fix { x, tau, e } => do_!(
-        //     {
-        //         let mut ctx = ctx;
-        //         ctx.insert(x.clone(), *tau.clone());
-        //         type_check_expr(e, ctx)
-        //     } => tau_e,
-        //     if Type::alpha_equiv(*tau.clone(), tau_e.clone()) {
-        //         Ok(tau_e)
-        //     } else {
-        //         type_mismatch!(tau, tau_e, "fixpoint")
-        //     }
-        // ),
         // // 7. polymorphism
         // Expr::TyLam { a, e } => do_!(
         //     type_check_expr(e, ctx) => tau_e,
