@@ -18,16 +18,11 @@ fn fresh(v: &Variable) -> Variable {
     Variable::from(format!("{}_", v.0))
 }
 
-fn add_depth<I>(depth: HashMap<Variable, usize>, it: I) -> HashMap<Variable, usize>
-where
-    I: IntoIterator<Item = Variable>,
-{
-    let mut depth = depth;
+fn add_depth(depth: &mut HashMap<Variable, usize>, it: impl IntoIterator<Item = Variable>) {
     for (_, v) in depth.iter_mut() {
         *v += 1;
     }
-    depth.extend(it.into_iter().map(|v| (v.clone(), 0)));
-    depth
+    depth.extend(it.into_iter().map(|v| (v, 0)));
 }
 
 /// Trivial cases: iterate through an expression's children
@@ -35,7 +30,6 @@ macro_rules! trivial {
     ($namespace:tt, $ty:tt, $rename:ident, $method:ident; $($prefix:ident),*; $($i:ident),+; $($suffix:ident),*) => {
         $namespace::$ty {
             $($prefix,)*
-            // TODO: remove the extra clone for the last element
             $($i: Box::new($i.$method($rename.clone())),)+
             $($suffix,)*
         }
@@ -55,7 +49,7 @@ pub trait Symbol: Sized {
 }
 
 impl Symbol for Type {
-    fn to_debruijn_map(self, depth: HashMap<Variable, usize>) -> Self {
+    fn to_debruijn_map(self, mut depth: HashMap<Variable, usize>) -> Self {
         match self {
             Type::Num | Type::Bool | Type::Unit => self,
             Type::Product { left, right } => {
@@ -67,14 +61,14 @@ impl Symbol for Type {
                 Some(depth) => Variable::from(depth.to_string()),
             }),
             Type::Forall { a, tau } => {
-                let depth = add_depth(depth, [a]);
+                add_depth(&mut depth, [a]);
                 Type::Forall {
                     a: Variable::from("_"),
                     tau: Box::new(tau.to_debruijn_map(depth)),
                 }
             }
             Type::Rec { a, tau } => {
-                let depth = add_depth(depth, [a]);
+                add_depth(&mut depth, [a]);
                 Type::Rec {
                     a: Variable::from("_"),
                     tau: Box::new(tau.to_debruijn_map(depth)),
@@ -82,7 +76,7 @@ impl Symbol for Type {
             }
             Type::Fn { arg, ret } => trivial!(Type, Fn, depth, to_debruijn_map;; arg, ret;),
             Type::Exists { a, tau } => {
-                let depth = add_depth(depth, [a]);
+                add_depth(&mut depth, [a]);
                 Type::Exists {
                     a: Variable::from("_"),
                     tau: Box::new(tau.to_debruijn_map(depth)),
@@ -139,7 +133,7 @@ impl Symbol for Type {
 }
 
 impl Symbol for Expr {
-    fn to_debruijn_map(self, depth: HashMap<Variable, usize>) -> Self {
+    fn to_debruijn_map(self, mut depth: HashMap<Variable, usize>) -> Self {
         match self {
             Expr::DeBruijn(_) => unreachable!(),
             Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => self.clone(),
@@ -148,7 +142,7 @@ impl Symbol for Expr {
                 Some(depth) => Self::DeBruijn(*depth),
             },
             Expr::Lam { x, e } => {
-                let depth = add_depth(depth, [x.clone()]);
+                add_depth(&mut depth, [x.clone()]);
                 Expr::Lam {
                     x: Variable::from("_"),
                     e: Box::new(e.to_debruijn_map(depth)),
@@ -183,17 +177,18 @@ impl Symbol for Expr {
                 xright,
                 eright,
             } => {
-                let depth_new = add_depth(depth.clone(), [xleft, xright]);
+                let original_depth = depth.clone();
+                add_depth(&mut depth, [xleft.clone(), xright.clone()]);
                 Expr::Case {
-                    e: Box::new(e.to_debruijn_map(depth)),
+                    e: Box::new(e.to_debruijn_map(original_depth)),
                     xleft: Variable::from("_"),
-                    eleft: Box::new(eleft.to_debruijn_map(depth_new.clone())),
+                    eleft: Box::new(eleft.to_debruijn_map(depth.clone())),
                     xright: Variable::from("_"),
-                    eright: Box::new(eright.to_debruijn_map(depth_new)),
+                    eright: Box::new(eright.to_debruijn_map(depth)),
                 }
             }
             Expr::Fix { x, e } => {
-                let depth = add_depth(depth, [x]);
+                add_depth(&mut depth, [x.clone()]);
                 Expr::Fix {
                     x: Variable::from("_"),
                     e: Box::new(e.to_debruijn_map(depth)),
@@ -202,7 +197,7 @@ impl Symbol for Expr {
             Expr::TyApp { e, tau } => trivial!(Expr, TyApp, depth, to_debruijn_map;; e, tau;),
             Expr::Fold { e, tau } => trivial!(Expr, Fold, depth, to_debruijn_map;; e, tau;),
             Expr::TyLam { a, e } => {
-                let depth = add_depth(depth, [a]);
+                add_depth(&mut depth, [a.clone()]);
                 Expr::TyLam {
                     a: Variable::from("_"),
                     e: Box::new(e.to_debruijn_map(depth)),
@@ -220,7 +215,7 @@ impl Symbol for Expr {
                 e_mod,
                 e_body,
             } => {
-                let depth = add_depth(depth, [x, a]);
+                add_depth(&mut depth, [x.clone(), a.clone()]);
                 Expr::Import {
                     x: Variable::from("_"),
                     a: Variable::from("_"),

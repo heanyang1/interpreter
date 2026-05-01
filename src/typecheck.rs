@@ -126,6 +126,7 @@ fn unification(
                 }
             }
             (Type::Var(var), val) | (val, Type::Var(var)) => match map.insert(var, val.clone()) {
+                // TODO: check whether val contains var
                 None => (),
                 Some(old_val) => {
                     constraints.push_back(Constraint {
