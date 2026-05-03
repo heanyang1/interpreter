@@ -185,15 +185,11 @@ impl ToGraph for Expr {
                 xright.to_graph(cur.clone()),
                 eright.to_graph(cur)
             ),
-            Expr::TyApp { e, tau } => do_!(
-                new_node("tyapp", parent, "red") => cur,
-                e.to_graph(cur.clone()),
-                tau.to_graph(cur)
-            ),
-            Expr::TyLam { a, e } => do_!(
-                new_node("Λ", parent, "red") => cur,
-                a.to_graph(cur.clone()),
-                e.to_graph(cur)
+            Expr::Let { x, e_x, e_in } => do_!(
+                new_node("let", parent, "red") => cur,
+                x.to_graph(cur.clone()),
+                e_x.to_graph(cur.clone()),
+                e_in.to_graph(cur)
             ),
             Expr::Fold { e, tau } => do_!(
                 new_node("fold", parent, "red") => cur,

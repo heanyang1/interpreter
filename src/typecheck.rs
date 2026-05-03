@@ -28,6 +28,12 @@ impl Display for Constraint {
     }
 }
 
+macro_rules! flat {
+    ($vec:expr) => {
+        $vec.into_iter().flatten().collect()
+    };
+}
+
 fn type_check_with_free_vars(ast: &Expr) -> Result<Type, String> {
     let mut ctx = vec![];
     let ast = ast.clone().to_debruijn();
@@ -64,12 +70,6 @@ pub fn type_check(ast: &Expr) -> Result<Type, String> {
 fn fresh_type_var() -> Type {
     let cur_id = VAR_ID.fetch_add(1, Ordering::Relaxed);
     Type::Var(Variable(format!("type_{cur_id}")))
-}
-
-macro_rules! flat {
-    ($vec:expr) => {
-        $vec.into_iter().flatten().collect()
-    };
 }
 
 fn scoped_type_vars(tau: &Type) -> Vec<Variable> {
@@ -506,7 +506,12 @@ fn type_check_expr(ast: &Expr, ctx: &mut Vec<Type>) -> Result<(Type, Vec<Constra
             ]);
             Ok((tau_x, constraints))
         }
-        // // 7. polymorphism
+        // 7. polymorphism
+        // Expr::Let { x, e_x, e_in } => {
+        //     let tau_e = type_check_with_free_vars(e_x)?;
+
+        //     todo!()
+        // }
         // Expr::TyLam { a, e } => do_!(
         //     type_check_expr(e, ctx) => tau_e,
         //     Ok(Type::Forall { a: a.clone(), tau: Box::new(tau_e) })

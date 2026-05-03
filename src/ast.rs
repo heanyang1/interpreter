@@ -172,13 +172,10 @@ pub enum Expr {
         x: Variable,
         e: Box<Expr>,
     },
-    TyLam {
-        a: Variable,
-        e: Box<Expr>,
-    },
-    TyApp {
-        e: Box<Expr>,
-        tau: Box<Type>,
+    Let {
+        x: Variable,
+        e_x: Box<Expr>,
+        e_in: Box<Expr>,
     },
     Fold {
         e: Box<Expr>,
@@ -235,8 +232,7 @@ impl Display for Expr {
             ),
             Expr::App { lam, arg } => write!(f, "({} {})", lam, arg),
             Expr::Lam { x, e } => write!(f, "(λ {} -> {})", x, e),
-            Expr::TyLam { a, e } => write!(f, "(Λ {} -> {})", a, e),
-            Expr::TyApp { e, tau } => write!(f, "({} {})", e, tau),
+            Expr::Let { x, e_x, e_in } => write!(f, "(let {x} = {e_x} in {e_in})"),
             Expr::Fix { x, e } => write!(f, "(fix {} -> {})", x, e),
             Expr::Fold { e, .. } => write!(f, "(fold {} as ...)", e),
             Expr::Unfold(e) => write!(f, "(unfold {})", e),

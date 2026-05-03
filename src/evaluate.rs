@@ -85,7 +85,6 @@ pub fn try_step(expr: &Expr) -> Outcome {
         | Expr::Pair { .. }
         | Expr::Unit
         | Expr::Inject { .. }
-        | Expr::TyLam { .. }
         | Expr::Export { .. }
         | Expr::Fold { .. } => Outcome::Value,
         // 1. arithmetic
@@ -231,17 +230,17 @@ pub fn try_step(expr: &Expr) -> Outcome {
         }
         // 6. fixpoints
         Expr::Fix { x, e, .. } => Outcome::Step(e.clone().substitute(x.clone(), expr.clone())),
-        // 7. polymorphism
-        Expr::TyApp { e, tau } => free_fall!(
-            (e, |e| Expr::TyApp {
-                e: Box::new(e),
-                tau: tau.clone(),
-            }),
-            match e.as_ref() {
-                Expr::TyLam { e, .. } => Outcome::Step(*e.clone()),
-                _ => unreachable!("{e:?}"),
-            }
-        ),
+        // 7. let-polymorphism
+        Expr::Let { x, e_x, e_in } => {
+            let lam = Expr::Lam {
+                x: x.clone(),
+                e: e_in.clone().into(),
+            };
+            Outcome::Step(Expr::App {
+                lam: lam.into(),
+                arg: e_x.clone(),
+            })
+        }
         // 8. recursive types
         Expr::Unfold(e) => free_fall!(
             (e, |e| Expr::Unfold(Box::new(e))),

@@ -1,10 +1,9 @@
 #[cfg(test)]
 mod tests {
     use interpreter::ast::*;
-    use interpreter::ast_util::Symbol;
     use interpreter::evaluate::eval;
     use interpreter::flags::{Mode, OutputMode};
-    use interpreter::parser::{parse, parse_type};
+    use interpreter::parser::parse;
     use interpreter::typecheck::type_check;
 
     #[test]
@@ -37,44 +36,5 @@ mod tests {
         .unwrap();
         assert_eq!(eval(&counter, Mode::Eval, OutputMode::Full), Expr::Num(2));
         assert_eq!(type_check(&counter).unwrap(), Type::Num);
-    }
-
-    #[test]
-    #[ignore]
-    fn aequiv() {
-        assert!(Expr::alpha_equiv(
-            *parse(
-                r#"
-                let x : rec a . num * (a -> num) =
-                  fold (0, fun (o : rec a . num * (a -> num)) -> (unfold o).L)
-                  as rec a . num * (a -> num)
-                in
-                (unfold x).L
-                "#,
-            )
-            .unwrap(),
-            *parse(
-                r#"
-                let y : rec b . num * (b -> num) =
-                  fold (0, fun (o : rec b . num * (b -> num)) -> (unfold o).L)
-                  as rec b . num * (b -> num)
-                in
-                (unfold y).L
-                "#,
-            )
-            .unwrap()
-        ));
-    }
-
-    #[test]
-    fn ty_aequiv() {
-        assert!(Type::alpha_equiv(
-            *parse_type("rec b . num * (b -> num)").unwrap(),
-            *parse_type("rec c . num * (c -> num)").unwrap()
-        ));
-        assert!(!Type::alpha_equiv(
-            *parse_type("rec a . unit * (a -> num)").unwrap(),
-            *parse_type("rec a . num * (a -> num)").unwrap()
-        ));
     }
 }

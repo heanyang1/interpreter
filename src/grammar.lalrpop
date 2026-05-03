@@ -17,13 +17,8 @@ LetRec: Box<Expr> = {
 };
 
 Let: Box<Expr> = {
-    <e:TyLam> => e,
-    "let" <x:Variable> "=" <evar:Let> "in" <ebody:Let> => Box::new(Expr::App { lam: Box::new(Expr::Lam { x, e: ebody }), arg: evar }),
-};
-
-TyLam: Box<Expr> = {
     <e:Func> => e,
-    "tyfun" <a:Variable> "->" <e:TyLam> => Box::new(Expr::TyLam { a, e }),
+    "let" <x:Variable> "=" <e_x:Let> "in" <e_in:Let> => Box::new(Expr::Let { x, e_x, e_in }),
 };
 
 Func: Box<Expr> = {
@@ -37,13 +32,8 @@ Fix: Box<Expr> = {
 };
 
 App: Box<Expr> = {
-    <e:TyApp> => e,
-    <lam:App> <arg:TyApp> => Box::new(Expr::App { lam, arg }),
-};
-
-TyApp: Box<Expr> = {
     <e:Import> => e,
-    <e:TyApp> "[" <tau:Type> "]" => Box::new(Expr::TyApp { e, tau }),
+    <lam:App> <arg:Import> => Box::new(Expr::App { lam, arg }),
 };
 
 Import: Box<Expr> = {
