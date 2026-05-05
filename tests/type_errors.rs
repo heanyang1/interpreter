@@ -39,8 +39,6 @@ mod tests {
     fn adt() {
         let proj = parse("1.L").unwrap();
         assert!(type_check(&proj).is_err());
-        let inj = parse("inj ()=L").unwrap();
-        assert!(type_check(&inj).is_err());
         let case = parse("case () {L(l)->l+1|R(r)->3*r}").unwrap();
         assert!(type_check(&case).is_err());
         let mul = parse("1*(1,2)").unwrap();
@@ -52,17 +50,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn fixpoints() {
-        let fix = parse("letrec f : num = 5 in f 1").unwrap();
+        let fix = parse("letrec f = 5 in f 1").unwrap();
         assert!(type_check(&fix).is_err());
-    }
-
-    #[test]
-    #[ignore]
-    fn polymorphism() {
-        let poly = parse("10 [num] 100").unwrap();
-        assert!(type_check(&poly).is_err());
     }
 
     #[test]

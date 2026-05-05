@@ -45,9 +45,22 @@ pub trait Symbol: Sized {
     fn substitute(self, s: Variable, e: Self) -> Self {
         self.substitute_map(HashMap::from([(s, e)]))
     }
+    fn contains_var(&self, s: &Variable) -> bool;
 }
 
 impl Symbol for Type {
+    fn contains_var(&self, s: &Variable) -> bool {
+        match self {
+            Type::Num | Type::Bool | Type::Unit => false,
+            Type::Var(x) => x.clone() == s.clone(),
+            Type::Product { left, right } | Type::Sum { left, right } => {
+                left.contains_var(s) || right.contains_var(s)
+            }
+            Type::Fn { arg, ret } => arg.contains_var(s) || ret.contains_var(s),
+            Type::Forall { a, tau } => a.clone() != s.clone() && tau.contains_var(s),
+            _ => todo!(),
+        }
+    }
     fn to_debruijn_map(self, mut depth: HashMap<Variable, usize>) -> Self {
         match self {
             Type::Num | Type::Bool | Type::Unit => self,
@@ -128,6 +141,9 @@ impl Symbol for Type {
 }
 
 impl Symbol for Expr {
+    fn contains_var(&self, s: &Variable) -> bool {
+        todo!()
+    }
     fn to_debruijn_map(self, mut depth: HashMap<Variable, usize>) -> Self {
         match self {
             Expr::DeBruijn(_) => unreachable!(),

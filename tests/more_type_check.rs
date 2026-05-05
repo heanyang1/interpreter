@@ -73,7 +73,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn typecheck_let() {
         assert_eq!(
             type_check(&parse("let f = fun x -> x + 1 in f 2").unwrap()).unwrap(),
@@ -82,10 +81,20 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn typecheck_free_var() {
         let expr = parse("let id = fun x -> x in id").unwrap();
-        assert!(type_check(&expr).is_err());
+        let ty = type_check(&expr).unwrap();
+        println!("{ty}");
+        match ty {
+            Type::Forall { a, tau } => match *tau {
+                Type::Fn { arg, ret } => {
+                    assert!(matches!(*arg.clone(), Type::Var(a)));
+                    assert!(matches!(*ret.clone(), Type::Var(a)));
+                }
+                _ => panic!("Expected function type, got {:?}", tau),
+            },
+            _ => panic!("Expected forall type, got {:?}", ty),
+        }
     }
 
     #[test]
@@ -102,7 +111,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn typecheck_fn_nested() {
         let expr = parse("let f = fun x -> fun y -> x + y in f").unwrap();
         let ty = type_check(&expr).unwrap();
@@ -134,7 +142,7 @@ mod tests {
                 }
                 assert!(matches!(*ret.clone(), Type::Bool));
             }
-            _ => panic!("Expected function type, got {:?}", ty),
+            _ => panic!("Expected function type, got {ty}"),
         }
     }
 }

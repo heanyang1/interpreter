@@ -57,21 +57,27 @@ where
         self.parent[x]
     }
 
-    pub fn union(&mut self, x: &T, y: &T) -> Result<bool, String> {
+    pub fn union(&mut self, x: &T, y: &T) -> Result<&T, String> {
         let root_x = self.find_with_id(self.get_idx(x)?);
         let root_y = self.find_with_id(self.get_idx(y)?);
         if root_x == root_y {
-            return Ok(false);
+            return Ok(&self.elems[root_x]);
         }
         match self.rank[root_x as usize].cmp(&self.rank[root_y as usize]) {
-            Ordering::Less => self.parent[root_x as usize] = root_y,
-            Ordering::Greater => self.parent[root_y as usize] = root_x,
+            Ordering::Less => {
+                self.parent[root_x as usize] = root_y;
+                Ok(&self.elems[root_y])
+            }
+            Ordering::Greater => {
+                self.parent[root_y as usize] = root_x;
+                Ok(&self.elems[root_x])
+            }
             Ordering::Equal => {
                 self.parent[root_y as usize] = root_x;
                 self.rank[root_x as usize] += 1;
+                Ok(&self.elems[root_x])
             }
         }
-        Ok(true)
     }
 
     pub fn connected(&mut self, x: &T, y: &T) -> Result<bool, String> {
@@ -85,8 +91,16 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "UnionFind {{")?;
-        writeln!(f, "  elements: {}", Printer(", ").print_map(&self.elem_index))?;
-        writeln!(f, "  parent: {}", Printer(", ").print_it(self.parent.iter()))?;
+        writeln!(
+            f,
+            "  elements: {}",
+            Printer(", ").print_map(&self.elem_index)
+        )?;
+        writeln!(
+            f,
+            "  parent: {}",
+            Printer(", ").print_it(self.parent.iter())
+        )?;
         writeln!(f, "  rank: {}", Printer(", ").print_it(self.rank.iter()))?;
         write!(f, "}}")
     }
@@ -117,11 +131,13 @@ mod tests {
     fn test_union() {
         let elems = vec![0u32, 1, 2, 3];
         let mut uf = UnionFind::new(elems);
-        assert!(uf.union(&0, &1).unwrap());
-        assert!(uf.union(&2, &3).unwrap());
+        let root01 = uf.union(&0, &1).unwrap();
+        assert_eq!(*root01, 0);
+        let root23 = uf.union(&2, &3).unwrap();
+        assert_eq!(*root23, 2);
         assert!(uf.connected(&0, &1).unwrap());
         assert!(!uf.connected(&0, &2).unwrap());
-        assert!(uf.union(&0, &2).unwrap());
+        let root012 = uf.union(&0, &2).unwrap();
         assert!(uf.connected(&0, &2).unwrap());
         assert!(uf.connected(&0, &3).unwrap());
     }
@@ -130,8 +146,10 @@ mod tests {
     fn test_already_connected() {
         let elems = vec![0u32, 1, 2];
         let mut uf = UnionFind::new(elems);
-        uf.union(&0, &1).unwrap();
-        assert!(!uf.union(&0, &1).unwrap());
+        let root = uf.union(&0, &1).unwrap();
+        assert_eq!(*root, 0);
+        let root_same = uf.union(&0, &1).unwrap();
+        assert_eq!(*root_same, 0);
     }
 
     #[test]
@@ -162,26 +180,117 @@ mod tests {
     }
 
     #[test]
+    fn test_get_idx_not_found() {
+        let elems = vec![0u32, 1, 2];
+        let uf = UnionFind::new(elems);
+        let result = uf.get_idx(&99);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_find_not_found() {
+        let elems = vec![0u32, 1, 2];
+        let mut uf = UnionFind::new(elems);
+        let result = uf.find(&99);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_union_not_found() {
+        let elems = vec![0u32, 1, 2];
+        let mut uf = UnionFind::new(elems);
+        let result = uf.union(&0, &99);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_connected_not_found() {
+        let elems = vec![0u32, 1, 2];
+        let mut uf = UnionFind::new(elems);
+        let result = uf.connected(&0, &99);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_union_rank_less() {
         let elems = vec![0u32, 1, 2, 3, 4];
         let mut uf = UnionFind::new(elems);
+        assert_eq!(uf.rank[0], 0);
+        assert_eq!(uf.rank[1], 0);
+        assert_eq!(uf.rank[2], 0);
         uf.parent[1] = 2;
         uf.rank[0] = 1;
         uf.rank[2] = 2;
-        uf.union(&0, &1).unwrap();
-        let root = uf.get_idx(&0).unwrap();
-        assert_eq!(uf.parent[root], 2);
+        assert_eq!(uf.rank[0], 1);
+        assert_eq!(uf.rank[2], 2);
+        let root = uf.union(&0, &1).unwrap();
+        assert_eq!(*root, 2);
+        assert_eq!(uf.parent[0], 2);
     }
 
     #[test]
     fn test_union_rank_greater() {
         let elems = vec![0u32, 1, 2, 3, 4];
         let mut uf = UnionFind::new(elems);
+        assert_eq!(uf.rank[0], 0);
+        assert_eq!(uf.rank[1], 0);
+        assert_eq!(uf.rank[2], 0);
         uf.parent[1] = 2;
         uf.rank[0] = 2;
         uf.rank[2] = 1;
-        uf.union(&0, &1).unwrap();
+        assert_eq!(uf.rank[0], 2);
+        assert_eq!(uf.rank[2], 1);
+        let root = uf.union(&0, &1).unwrap();
+        assert_eq!(*root, 0);
         assert_eq!(uf.parent[2], 0);
+    }
+
+    #[test]
+    fn test_union_rank_less_explicit() {
+        let elems = vec![10u32, 20, 30, 40];
+        let mut uf = UnionFind::new(elems);
+        uf.parent[1] = 2;
+        uf.rank[0] = 1;
+        uf.rank[2] = 2;
+        assert!(uf.rank[0] < uf.rank[2]);
+        let _root = uf.union(&10, &20).unwrap();
+    }
+
+    #[test]
+    fn test_union_rank_greater_explicit() {
+        let elems = vec![10u32, 20, 30, 40];
+        let mut uf = UnionFind::new(elems);
+        uf.parent[1] = 2;
+        uf.rank[0] = 2;
+        uf.rank[2] = 1;
+        assert!(uf.rank[0] > uf.rank[2]);
+        let _root = uf.union(&10, &20).unwrap();
+    }
+
+    #[test]
+    fn test_union_returns_root_element() {
+        let elems = vec![0u32, 1, 2, 3];
+        let mut uf = UnionFind::new(elems);
+        let root = uf.union(&0, &1).unwrap();
+        assert_eq!(*root, 0);
+    }
+
+    #[test]
+    fn test_union_returns_root_element_rank_equal() {
+        let elems = vec![0u32, 1, 2];
+        let mut uf = UnionFind::new(elems);
+        let root = uf.union(&0, &1).unwrap();
+        assert_eq!(*root, 0);
+    }
+
+    #[test]
+    fn test_union_multiple_returns_correct_root() {
+        let elems = vec![0u32, 1, 2, 3, 4, 5];
+        let mut uf = UnionFind::new(elems);
+        uf.union(&0, &1).unwrap();
+        uf.union(&2, &3).unwrap();
+        let root = uf.union(&0, &2).unwrap();
+        assert_eq!(*root, 0);
     }
 
     #[test]

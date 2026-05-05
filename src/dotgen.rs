@@ -103,7 +103,12 @@ impl ToGraph for Variable {
 impl ToGraph for Expr {
     fn to_graph(&self, parent: NodeIndex) -> Writer<()> {
         match self {
-            Expr::Var(_) | Expr::DeBruijn(_) | Expr::Num(_) | Expr::True | Expr::False | Expr::Unit => {
+            Expr::Var(_)
+            | Expr::DeBruijn(_)
+            | Expr::Num(_)
+            | Expr::True
+            | Expr::False
+            | Expr::Unit => {
                 do_!(new_node(self, parent, "red"), Writer::ret(()))
             }
             Expr::Addop { binop, left, right } => do_!(
