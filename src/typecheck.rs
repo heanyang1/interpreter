@@ -98,20 +98,7 @@ impl GetVars for Type {
     }
 }
 
-trait RemoveQuantifiers {
-    fn remove_quantifiers(self) -> Self;
-}
-
-impl<T> RemoveQuantifiers for Vec<T>
-where
-    T: RemoveQuantifiers,
-{
-    fn remove_quantifiers(self) -> Self {
-        self.into_iter().map(|x| x.remove_quantifiers()).collect()
-    }
-}
-
-impl RemoveQuantifiers for Type {
+impl Type {
     fn remove_quantifiers(self) -> Self {
         match self {
             Type::Bool | Type::Num | Type::Unit | Type::Var(_) => self,
@@ -133,29 +120,12 @@ impl RemoveQuantifiers for Type {
     }
 }
 
-impl RemoveQuantifiers for Constraint {
-    fn remove_quantifiers(self) -> Self {
-        Self {
-            type_l: self.type_l.remove_quantifiers(),
-            type_r: self.type_r.remove_quantifiers(),
-            expr_l: self.expr_l,
-            expr_r: self.expr_r,
-        }
-    }
-}
-
 impl Type {
     fn add_one_quantifier(self, a: Variable) -> Self {
         Type::Forall {
             a,
             tau: self.into(),
         }
-    }
-    fn add_quantifiers(mut self, ctx: &mut Vec<Type>) -> Self {
-        for a in vec_diff(self.get_free_vars(), ctx.get_free_vars()) {
-            self = self.add_one_quantifier(a)
-        }
-        self
     }
 }
 
@@ -448,15 +418,8 @@ impl Display for Constraint {
 
 pub fn type_check(ast: &Expr) -> Result<Type, String> {
     let ty = ast.clone().to_debruijn().type_check()?;
-    let free_vars = ty.get_free_vars();
-    if free_vars.is_empty() {
-        Ok(ty)
-    } else {
-        Err(format!(
-            "Free variable: {}",
-            Printer(", ").print_it(free_vars.iter())
-        ))
-    }
+    assert!(ty.get_free_vars().is_empty());
+    Ok(ty)
 }
 
 fn fresh_type_var() -> Type {

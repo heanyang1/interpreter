@@ -145,4 +145,114 @@ mod tests {
             _ => panic!("Expected function type, got {ty}"),
         }
     }
+
+    #[test]
+    fn typecheck_pair() {
+        let expr = parse("(1, true)").unwrap();
+        let ty = type_check(&expr).unwrap();
+        match ty {
+            Type::Product { left, right } => {
+                assert!(matches!(*left, Type::Num));
+                assert!(matches!(*right, Type::Bool));
+            }
+            _ => panic!("Expected product type, got {ty}"),
+        }
+    }
+
+    #[test]
+    fn typecheck_project_left() {
+        let expr = parse("(1, true).L").unwrap();
+        let ty = type_check(&expr).unwrap();
+        assert_eq!(ty, Type::Num);
+    }
+
+    #[test]
+    fn typecheck_project_right() {
+        let expr = parse("(1, true).R").unwrap();
+        let ty = type_check(&expr).unwrap();
+        assert_eq!(ty, Type::Bool);
+    }
+
+    #[test]
+    fn typecheck_inject_left() {
+        let expr = parse("inj 1 = L").unwrap();
+        let ty = type_check(&expr).unwrap();
+        match ty {
+            Type::Forall { a: _, tau } => match *tau {
+                Type::Sum { left, right: _ } => {
+                    assert!(matches!(*left, Type::Num));
+                }
+                _ => panic!("Expected sum type in forall, got {:?}", tau),
+            },
+            Type::Sum { left, right: _ } => {
+                assert!(matches!(*left, Type::Num));
+            }
+            _ => panic!("Expected sum or forall type, got {ty}"),
+        }
+    }
+
+    #[test]
+    fn typecheck_inject_right() {
+        let expr = parse("inj true = R").unwrap();
+        let ty = type_check(&expr).unwrap();
+        match ty {
+            Type::Forall { a: _, tau } => match *tau {
+                Type::Sum { left: _, right } => {
+                    assert!(matches!(*right, Type::Bool));
+                }
+                _ => panic!("Expected sum type in forall, got {:?}", tau),
+            },
+            Type::Sum { left: _, right } => {
+                assert!(matches!(*right, Type::Bool));
+            }
+            _ => panic!("Expected sum or forall type, got {ty}"),
+        }
+    }
+
+    #[test]
+    fn typecheck_case() {
+        let expr = parse("case inj 1 = L { L(x) -> x | R(y) -> y }").unwrap();
+        let ty = type_check(&expr).unwrap();
+        assert_eq!(ty, Type::Num);
+    }
+
+    #[test]
+    fn typecheck_fix() {
+        let expr = parse("fix f -> 1").unwrap();
+        let ty = type_check(&expr).unwrap();
+        assert_eq!(ty, Type::Num);
+    }
+
+    #[test]
+    fn typecheck_letrec() {
+        let expr = parse("letrec f = fun x -> if x == 0 then 0 else (f (x - 1)) + 1 in f").unwrap();
+        let ty = type_check(&expr).unwrap();
+        match ty {
+            Type::Fn { arg, ret } => {
+                assert!(matches!(*arg, Type::Num));
+                assert!(matches!(*ret, Type::Num));
+            }
+            _ => panic!("Expected function type, got {ty}"),
+        }
+    }
+
+    #[test]
+    fn typecheck_free_variable_error() {
+        let expr = parse("x").unwrap();
+        let result = type_check(&expr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn typecheck_polymorphism_multiple_vars() {
+        let expr = parse("let id = fun x -> x in let f = fun y -> y in (id true, f 1)").unwrap();
+        let ty = type_check(&expr).unwrap();
+        match ty {
+            Type::Product { left, right } => {
+                assert!(matches!(*left, Type::Bool));
+                assert!(matches!(*right, Type::Num));
+            }
+            _ => panic!("Expected product type, got {ty}"),
+        }
+    }
 }
