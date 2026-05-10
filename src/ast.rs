@@ -35,14 +35,14 @@ pub enum Type {
     Exists { a: Variable, tau: Box<Type> },
 }
 
-impl std::fmt::Display for Type {
+impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Num => write!(f, "num"),
             Type::Bool => write!(f, "bool"),
             Type::Unit => write!(f, "()"),
             Type::Var(v) => write!(f, "{}", v),
-            Type::Fn { arg, ret } => write!(f, "{} → {}", arg, ret),
+            Type::Fn { arg, ret } => write!(f, "({} → {})", arg, ret),
             Type::Product { left, right } => write!(f, "{} * {}", left, right),
             Type::Sum { left, right } => write!(f, "{} + {}", left, right),
             Type::Rec { a, tau } => write!(f, "μ {} . {}", a, tau),

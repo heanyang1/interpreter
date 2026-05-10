@@ -255,4 +255,18 @@ mod tests {
             _ => panic!("Expected product type, got {ty}"),
         }
     }
+
+    #[test]
+    fn typecheck_generalize() {
+        let expr = parse(
+            r#"
+            let f = fun x -> fun y -> x y
+            in let g = f (fun x -> x)
+               in g 1
+            "#,
+        )
+        .unwrap();
+        let ty = type_check(&expr).unwrap();
+        assert_eq!(ty, Type::Num)
+    }
 }

@@ -109,15 +109,13 @@ impl Symbol for Type {
                 Some(val) => val.clone(),
                 None => Type::Var(v),
             },
-            Type::Forall { a, tau } => {
-                let mut rename = rename;
-                let new_a = fresh(&a);
-                rename.insert(a, Type::Var(new_a.clone()));
-                Type::Forall {
-                    a: new_a,
+            Type::Forall { a, tau } => match rename.get(&a) {
+                Some(_) => tau.substitute_map(rename),
+                None => Type::Forall {
+                    a,
                     tau: Box::new(tau.substitute_map(rename)),
-                }
-            }
+                },
+            },
             Type::Rec { a, tau } => {
                 let mut rename = rename;
                 let new_a = fresh(&a);
@@ -403,7 +401,7 @@ mod tests {
             },
         ];
         let s = Printer("|").print_it(v.iter());
-        assert_eq!(s, "[num|bool → num]");
+        assert_eq!(s, "[num|(bool → num)]");
     }
 
     #[test]
@@ -559,10 +557,17 @@ mod tests {
         };
         let rename = HashMap::from([("a".into(), Type::Num)]);
         let result = ty.substitute_map(rename);
+        assert_eq!(result, Type::Num);
+        let ty = Type::Forall {
+            a: "a1".into(),
+            tau: Box::new(Type::Var("a".into())),
+        };
+        let rename = HashMap::from([("a".into(), Type::Num)]);
+        let result = ty.substitute_map(rename);
         match result {
             Type::Forall { a, tau } => {
-                assert_ne!(a.0, "a");
-                assert_eq!(*tau, Type::Var(a));
+                assert_eq!(a.0, "a1");
+                assert_eq!(*tau, Type::Num);
             }
             _ => panic!("Expected Forall"),
         }

@@ -91,7 +91,7 @@ impl GetVars for Type {
                 .chain(right.get_all_vars())
                 .collect(),
             Type::Forall { a, tau } => std::iter::once(a.clone())
-                .chain(tau.get_scoped_vars())
+                .chain(tau.get_all_vars())
                 .collect(),
             _ => todo!(),
         }
@@ -99,28 +99,43 @@ impl GetVars for Type {
 }
 
 impl Type {
-    fn remove_quantifiers(self) -> Self {
+    fn instantiate(self) -> Self {
         match self {
             Type::Bool | Type::Num | Type::Unit | Type::Var(_) => self,
-            Type::Forall { a, tau } => tau.remove_quantifiers().substitute(a, fresh_type_var()),
+            Type::Forall { a, tau } => tau.instantiate().substitute(a, fresh_type_var()),
             Type::Sum { left, right } => Type::Sum {
-                left: left.remove_quantifiers().into(),
-                right: right.remove_quantifiers().into(),
+                left: left.instantiate().into(),
+                right: right.instantiate().into(),
             },
             Type::Product { left, right } => Type::Product {
-                left: left.remove_quantifiers().into(),
-                right: right.remove_quantifiers().into(),
+                left: left.instantiate().into(),
+                right: right.instantiate().into(),
             },
             Type::Fn { arg, ret } => Type::Fn {
-                arg: arg.remove_quantifiers().into(),
-                ret: ret.remove_quantifiers().into(),
+                arg: arg.instantiate().into(),
+                ret: ret.instantiate().into(),
             },
             _ => todo!(),
         }
     }
-}
 
-impl Type {
+    fn generalize(self, ctx: &Vec<Type>, constraints: Vec<Constraint>) -> Result<Type, String> {
+        println!("generalize: {self}");
+        let (uf, map) = unification(constraints)?;
+        let mut tau_x = get_type(self, uf, map);
+        println!(
+            "free: {} {}",
+            Printer(", ").print_it(tau_x.get_all_vars().iter()),
+            Printer(", ").print_it(ctx.get_all_vars().iter())
+        );
+        for a in vec_diff(tau_x.get_free_vars(), ctx.get_free_vars()) {
+            tau_x = tau_x.add_one_quantifier(a);
+        }
+        println!("generalize_to: {tau_x}");
+        println!("============");
+        Ok(tau_x)
+    }
+
     fn add_one_quantifier(self, a: Variable) -> Self {
         Type::Forall {
             a,
@@ -130,9 +145,8 @@ impl Type {
 }
 
 impl Expr {
-    // TODO: Change its name to get_constraints after we have finish every cases
     pub fn get_constraints(&self, ctx: &mut Vec<Type>) -> Result<(Type, Vec<Constraint>), String> {
-        let (tau_result, c_result) = match self {
+        match self {
             // 1. arithmetic
             Expr::Num(_) => Ok((Type::Num, vec![])),
             Expr::Addop { left, right, .. } | Expr::Mulop { left, right, .. } => {
@@ -240,7 +254,7 @@ impl Expr {
                     .next()
                     .unwrap()
                     .clone()
-                    .remove_quantifiers(),
+                    .instantiate(),
                 vec![],
             )),
             Expr::Lam { x: _, e } => {
@@ -385,16 +399,14 @@ impl Expr {
             // 7. polymorphism
             Expr::Let { e_x, e_in, .. } => {
                 let (tau_x, c_x) = e_x.get_constraints(ctx)?;
-                let (uf, map) = unification(c_x.clone())?;
-                let tau_x = get_type(tau_x, uf, map);
-                ctx.push(tau_x);
+                println!("type check: let {e_x} in {e_in}");
+                ctx.push(tau_x.generalize(ctx, c_x.clone())?);
                 let (tau_in, c_in) = e_in.get_constraints(ctx)?;
                 let _ = ctx.pop().unwrap();
                 Ok((tau_in, flat!(vec![c_in, c_x])))
             }
             _ => todo!(),
-        }?;
-        Ok((tau_result, c_result))
+        }
     }
 
     fn type_check(self) -> Result<Type, String> {
@@ -430,6 +442,10 @@ fn fresh_type_var() -> Type {
 fn unification(
     constraints: Vec<Constraint>,
 ) -> Result<(UnionFind<Variable>, HashMap<Variable, Type>), String> {
+    println!(
+        "unification: {}",
+        Printer(", ").print_it(constraints.iter())
+    );
     let variables: Vec<Variable> = constraints
         .iter()
         .flat_map(|c| vec![&c.type_l, &c.type_r])
@@ -547,17 +563,38 @@ fn unification(
         .into_iter()
         .map(|(x, y)| (uf.find(&x).unwrap().clone(), y))
         .collect();
+    println!("{uf}");
+    println!("{}", Printer(",").print_map(&updated_map));
+    println!("--------");
     Ok((uf, updated_map))
 }
 
 fn get_type(mut tau: Type, mut uf: UnionFind<Variable>, mut map: HashMap<Variable, Type>) -> Type {
     loop {
         let vars = tau.get_free_vars();
+        println!(
+            "get_type all: {}, scoped: {}",
+            Printer(", ").print_it(tau.get_all_vars().iter()),
+            Printer(", ").print_it(tau.get_scoped_vars().iter()),
+        );
         if vars.is_empty() {
             return tau;
         }
         let x = vars.first().unwrap();
-        match uf.find(x).ok().and_then(|r| map.remove(r)) {
+        println!(
+            "get_type {}, map: {}, free: {}, x: {x}",
+            tau,
+            Printer(", ").print_map(&map),
+            Printer(", ").print_it(vars.iter()),
+        );
+        let r_opt = uf.find(x);
+        if let Ok(r) = r_opt
+            && x != r
+        {
+            tau = tau.substitute(x.clone(), Type::Var(r.clone()));
+            continue;
+        }
+        match r_opt.ok().and_then(|r| map.remove(r)) {
             Some(t_x) => tau = tau.substitute(x.clone(), t_x),
             None => tau = tau.add_one_quantifier(x.clone()),
         }
