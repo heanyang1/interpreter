@@ -260,9 +260,8 @@ mod tests {
     fn typecheck_generalize() {
         let expr = parse(
             r#"
-            let f = fun x -> fun y -> x y
-            in let g = f (fun x -> x)
-               in g 1
+            let f = fun x -> fun y -> x y in
+            let g = f (fun x -> x) in g 1
             "#,
         )
         .unwrap();

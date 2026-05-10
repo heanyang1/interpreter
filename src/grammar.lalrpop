@@ -1,4 +1,4 @@
-use crate::ast::{Expr, Type, AddOp, MulOp, RelOp, Direction, Variable};
+use crate::ast::{Expr, AddOp, MulOp, RelOp, Direction, Variable};
 
 grammar;
 
@@ -32,28 +32,8 @@ Fix: Box<Expr> = {
 };
 
 App: Box<Expr> = {
-    <e:Import> => e,
-    <lam:App> <arg:Import> => Box::new(Expr::App { lam, arg }),
-};
-
-Import: Box<Expr> = {
-    <e:Export> => e,
-    "import" "(" <x:Variable> "," <a:Variable> ")" "=" <e_mod:Import> "in" <e_body:Export> => Box::new(Expr::Import { x, a, e_mod, e_body }),
-};
-
-Export: Box<Expr> = {
-    <e:UnFold> => e,
-    "export" <e:UnFold> "without" <tau_adt:Type> "as" <tau_mod:Type> => Box::new(Expr::Export { e, tau_adt, tau_mod }),
-};
-
-UnFold: Box<Expr> = {
-    <e:Fold> => e,
-    "unfold" <e:Fold> => Box::new(Expr::Unfold(e)),    
-};
-
-Fold: Box<Expr> = {
     <e:If> => e,
-    "fold" <e:If> "as" <tau:Type> => Box::new(Expr::Fold { e, tau }),
+    <lam:App> <arg:If> => Box::new(Expr::App { lam, arg }),
 };
 
 If: Box<Expr> = {
@@ -131,36 +111,6 @@ RelOp: RelOp = {
 Direction: Direction = {
     "L" => Direction::Left,
     "R" => Direction::Right,
-};
-
-pub Type: Box<Type> = {
-    "rec" <a:Variable> "." <tau:Type> => Box::new(Type::Rec { a, tau }),
-    "forall" <a:Variable> "." <tau:Type> => Box::new(Type::Forall { a, tau }),
-    "exists" <a:Variable> "." <tau:Type> => Box::new(Type::Exists { a, tau }),
-    <t:FuncType> => t,
-};
-
-FuncType: Box<Type> = {
-    <t:ProductType> => t,
-    <arg:ProductType> "->" <ret:FuncType> => Box::new(Type::Fn { arg, ret }),
-};
-
-ProductType: Box<Type> = {
-    <t:SumType> => t,
-    <left:SumType> "*" <right:ProductType> => Box::new(Type::Product { left, right }),
-};
-
-SumType: Box<Type> = {
-    <t:PrimaryType> => t,
-    <left:PrimaryType> "+" <right:SumType> => Box::new(Type::Sum { left, right }),
-};
-
-PrimaryType: Box<Type> = {
-    "(" <t:Type> ")" => t,
-    <v:Variable> => Box::new(Type::Var(v)),
-    "num" => Box::new(Type::Num),
-    "bool" => Box::new(Type::Bool),
-    "unit" => Box::new(Type::Unit),
 };
 
 Variable: Variable = {

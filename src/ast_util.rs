@@ -58,7 +58,6 @@ impl Symbol for Type {
             }
             Type::Fn { arg, ret } => arg.contains_var(s) || ret.contains_var(s),
             Type::Forall { a, tau } => a.clone() != s.clone() && tau.contains_var(s),
-            _ => todo!(),
         }
     }
     fn to_debruijn_map(self, mut depth: HashMap<Variable, usize>) -> Self {
@@ -79,21 +78,7 @@ impl Symbol for Type {
                     tau: Box::new(tau.to_debruijn_map(depth)),
                 }
             }
-            Type::Rec { a, tau } => {
-                add_depth(&mut depth, [a]);
-                Type::Rec {
-                    a: Variable::from("_"),
-                    tau: Box::new(tau.to_debruijn_map(depth)),
-                }
-            }
             Type::Fn { arg, ret } => trivial!(Type, Fn, depth, to_debruijn_map;; arg, ret;),
-            Type::Exists { a, tau } => {
-                add_depth(&mut depth, [a]);
-                Type::Exists {
-                    a: Variable::from("_"),
-                    tau: Box::new(tau.to_debruijn_map(depth)),
-                }
-            }
         }
     }
 
@@ -116,24 +101,6 @@ impl Symbol for Type {
                     tau: Box::new(tau.substitute_map(rename)),
                 },
             },
-            Type::Rec { a, tau } => {
-                let mut rename = rename;
-                let new_a = fresh(&a);
-                rename.insert(a, Type::Var(new_a.clone()));
-                Type::Rec {
-                    a: new_a,
-                    tau: Box::new(tau.substitute_map(rename)),
-                }
-            }
-            Type::Exists { a, tau } => {
-                let mut rename = rename;
-                let new_a = fresh(&a);
-                rename.insert(a, Type::Var(new_a.clone()));
-                Type::Exists {
-                    a: new_a,
-                    tau: Box::new(tau.substitute_map(rename)),
-                }
-            }
         }
     }
 }
@@ -203,7 +170,6 @@ impl Symbol for Expr {
                     e: Box::new(e.to_debruijn_map(depth)),
                 }
             }
-            Expr::Fold { e, tau } => trivial!(Expr, Fold, depth, to_debruijn_map;; e, tau;),
             Expr::Let { x, e_x, e_in } => {
                 let depth_clone = depth.clone();
                 add_depth(&mut depth, [x.clone()]);
@@ -211,26 +177,6 @@ impl Symbol for Expr {
                     x: Variable::from("_"),
                     e_x: Box::new(e_x.to_debruijn_map(depth_clone)),
                     e_in: Box::new(e_in.to_debruijn_map(depth)),
-                }
-            }
-            Expr::Unfold(e) => Expr::Unfold(Box::new(e.to_debruijn_map(depth))),
-            Expr::Export {
-                e,
-                tau_adt,
-                tau_mod,
-            } => trivial!(Expr, Export, depth, to_debruijn_map;; e, tau_adt, tau_mod;),
-            Expr::Import {
-                x,
-                a,
-                e_mod,
-                e_body,
-            } => {
-                add_depth(&mut depth, [x.clone(), a.clone()]);
-                Expr::Import {
-                    x: Variable::from("_"),
-                    a: Variable::from("_"),
-                    e_mod: Box::new(e_mod.to_debruijn_map(depth.clone())),
-                    e_body: Box::new(e_body.to_debruijn_map(depth)),
                 }
             }
         }
@@ -311,33 +257,6 @@ impl Symbol for Expr {
                     x: new_a,
                     e_x: Box::new(e_x.substitute_map(rename.clone())),
                     e_in: Box::new(e_in.substitute_map(rename)),
-                }
-            }
-            Expr::Fold { e, tau } => trivial!(Expr, Fold, rename, substitute_map;; e; tau),
-            Expr::Unfold(e) => Expr::Unfold(Box::new(e.substitute_map(rename))),
-            Expr::Export {
-                e,
-                tau_adt,
-                tau_mod,
-            } => trivial!(Expr, Export, rename, substitute_map;; e; tau_adt, tau_mod),
-            Expr::Import {
-                x,
-                a,
-                e_mod,
-                e_body,
-            } => {
-                let mut rename = rename;
-                let new_x = fresh(&x);
-                let new_a = fresh(&a);
-                rename.extend([
-                    (x.clone(), Expr::Var(new_x.clone())),
-                    (a.clone(), Expr::Var(new_a.clone())),
-                ]);
-                Expr::Import {
-                    x: new_x,
-                    a: new_a,
-                    e_mod: Box::new(e_mod.substitute_map(rename.clone())),
-                    e_body: Box::new(e_body.substitute_map(rename)),
                 }
             }
         }
@@ -467,22 +386,6 @@ mod tests {
     }
 
     #[test]
-    fn test_type_to_debruijn_exists() {
-        let ty = Type::Exists {
-            a: "a".into(),
-            tau: Box::new(Type::Var("a".into())),
-        };
-        let result = ty.clone().to_debruijn();
-        match result {
-            Type::Exists { a, tau } => {
-                assert_eq!(a.0, "_");
-                assert_eq!(*tau, Type::Var("0".into()));
-            }
-            _ => panic!("Expected Exists"),
-        }
-    }
-
-    #[test]
     fn test_type_substitute_map_product() {
         let ty = Type::Product {
             left: Box::new(Type::Var("x".into())),
@@ -570,23 +473,6 @@ mod tests {
                 assert_eq!(*tau, Type::Num);
             }
             _ => panic!("Expected Forall"),
-        }
-    }
-
-    #[test]
-    fn test_type_substitute_map_exists() {
-        let ty = Type::Exists {
-            a: "a".into(),
-            tau: Box::new(Type::Var("a".into())),
-        };
-        let rename = HashMap::from([("a".into(), Type::Num)]);
-        let result = ty.substitute_map(rename);
-        match result {
-            Type::Exists { a, tau } => {
-                assert_ne!(a.0, "a");
-                assert_eq!(*tau, Type::Var(a));
-            }
-            _ => panic!("Expected Exists"),
         }
     }
 
@@ -775,23 +661,6 @@ mod tests {
         } else {
             panic!("Expected Let expression");
         }
-    }
-
-    #[test]
-    fn test_expr_to_debruijn_fold() {
-        let e = Expr::Fold {
-            e: Box::new(Expr::Num(1)),
-            tau: Box::new(Type::Num),
-        };
-        let result = e.clone().to_debruijn();
-        assert_eq!(result, e);
-    }
-
-    #[test]
-    fn test_expr_to_debruijn_unfold() {
-        let e = Expr::Unfold(Box::new(Expr::Num(1)));
-        let result = e.clone().to_debruijn();
-        assert_eq!(result, e);
     }
 
     #[test]
@@ -1030,31 +899,6 @@ mod tests {
     }
 
     #[test]
-    fn test_expr_substitute_map_fold() {
-        let e = Expr::Fold {
-            e: Box::new(Expr::Var("x".into())),
-            tau: Box::new(Type::Num),
-        };
-        let rename = HashMap::from([("x".into(), Expr::Num(1))]);
-        let result = e.substitute_map(rename);
-        assert_eq!(
-            result,
-            Expr::Fold {
-                e: Box::new(Expr::Num(1)),
-                tau: Box::new(Type::Num),
-            }
-        );
-    }
-
-    #[test]
-    fn test_expr_substitute_map_unfold() {
-        let e = Expr::Unfold(Box::new(Expr::Var("x".into())));
-        let rename = HashMap::from([("x".into(), Expr::Num(1))]);
-        let result = e.substitute_map(rename);
-        assert_eq!(result, Expr::Unfold(Box::new(Expr::Num(1))));
-    }
-
-    #[test]
     fn test_expr_substitute_using_trait() {
         let e = Expr::Var("x".into());
         let result = e.substitute("x".into(), Expr::Num(42));
@@ -1089,100 +933,6 @@ mod tests {
         let m: HashMap<String, i32> = HashMap::new();
         let s = Printer(", ").print_map(&m);
         assert_eq!(s, "[]");
-    }
-
-    #[test]
-    fn test_type_to_debruijn_rec() {
-        let ty = Type::Rec {
-            a: "a".into(),
-            tau: Box::new(Type::Var("a".into())),
-        };
-        let result = ty.clone().to_debruijn();
-        match result {
-            Type::Rec { a, tau } => {
-                assert_eq!(a.0, "_");
-                assert_eq!(*tau, Type::Var("0".into()));
-            }
-            _ => panic!("Expected Rec"),
-        }
-    }
-
-    #[test]
-    fn test_type_substitute_map_rec() {
-        let ty = Type::Rec {
-            a: "a".into(),
-            tau: Box::new(Type::Var("a".into())),
-        };
-        let rename = HashMap::from([("a".into(), Type::Num)]);
-        let result = ty.substitute_map(rename);
-        match result {
-            Type::Rec { a, tau } => {
-                assert_ne!(a.0, "a");
-                assert_eq!(*tau, Type::Var(a));
-            }
-            _ => panic!("Expected Rec"),
-        }
-    }
-
-    #[test]
-    fn test_expr_to_debruijn_export() {
-        let e = Expr::Export {
-            e: Box::new(Expr::Num(1)),
-            tau_adt: Box::new(Type::Num),
-            tau_mod: Box::new(Type::Bool),
-        };
-        let result = e.clone().to_debruijn();
-        assert_eq!(result, e);
-    }
-
-    #[test]
-    fn test_expr_to_debruijn_import() {
-        let e = Expr::Import {
-            x: "x".into(),
-            a: "a".into(),
-            e_mod: Box::new(Expr::Num(1)),
-            e_body: Box::new(Expr::Var("x".into())),
-        };
-        let result = e.clone().to_debruijn();
-        match result {
-            Expr::Import { x, a, .. } => {
-                assert_eq!(x.0, "_");
-                assert_eq!(a.0, "_");
-            }
-            _ => panic!("Expected Import"),
-        }
-    }
-
-    #[test]
-    fn test_expr_substitute_map_export() {
-        let e = Expr::Export {
-            e: Box::new(Expr::Var("x".into())),
-            tau_adt: Box::new(Type::Num),
-            tau_mod: Box::new(Type::Bool),
-        };
-        let rename = HashMap::from([("x".into(), Expr::Num(42))]);
-        let result = e.substitute_map(rename);
-        assert_eq!(
-            result,
-            Expr::Export {
-                e: Box::new(Expr::Num(42)),
-                tau_adt: Box::new(Type::Num),
-                tau_mod: Box::new(Type::Bool),
-            }
-        );
-    }
-
-    #[test]
-    fn test_expr_substitute_map_import() {
-        let e = Expr::Import {
-            x: "x".into(),
-            a: "a".into(),
-            e_mod: Box::new(Expr::Var("m".into())),
-            e_body: Box::new(Expr::Var("b".into())),
-        };
-        let rename = HashMap::from([("m".into(), Expr::Num(1)), ("b".into(), Expr::Num(2))]);
-        let result = e.substitute_map(rename);
-        assert!(matches!(result, Expr::Import { x, a, .. } if x.0 != "x" && a.0 != "a"));
     }
 
     #[test]

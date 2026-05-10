@@ -196,37 +196,6 @@ impl ToGraph for Expr {
                 e_x.to_graph(cur.clone()),
                 e_in.to_graph(cur)
             ),
-            Expr::Fold { e, tau } => do_!(
-                new_node("fold", parent, "red") => cur,
-                e.to_graph(cur.clone()),
-                tau.to_graph(cur)
-            ),
-            Expr::Unfold(e) => do_!(
-                new_node("unfold", parent, "red") => cur,
-                e.to_graph(cur)
-            ),
-            Expr::Import {
-                x,
-                a,
-                e_mod,
-                e_body,
-            } => do_!(
-                new_node("import", parent, "red") => cur,
-                x.to_graph(cur.clone()),
-                a.to_graph(cur.clone()),
-                e_mod.to_graph(cur.clone()),
-                e_body.to_graph(cur)
-            ),
-            Expr::Export {
-                e,
-                tau_adt,
-                tau_mod,
-            } => do_!(
-                new_node("export", parent, "red") => cur,
-                e.to_graph(cur.clone()),
-                tau_adt.to_graph(cur.clone()),
-                tau_mod.to_graph(cur)
-            ),
         }
     }
 }
@@ -252,18 +221,8 @@ impl ToGraph for Type {
                 arg.to_graph(cur.clone()),
                 ret.to_graph(cur)
             ),
-            Type::Rec { a, tau } => do_!(
-                new_node("μ", parent, "blue") => cur,
-                a.to_graph(cur.clone()),
-                tau.to_graph(cur)
-            ),
             Type::Forall { a, tau } => do_!(
                 new_node("∀", parent, "blue") => cur,
-                a.to_graph(cur.clone()),
-                tau.to_graph(cur)
-            ),
-            Type::Exists { a, tau } => do_!(
-                new_node("∃", parent, "blue") => cur,
                 a.to_graph(cur.clone()),
                 tau.to_graph(cur)
             ),

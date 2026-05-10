@@ -72,7 +72,6 @@ impl GetVars for Type {
             Type::Forall { a, tau } => std::iter::once(a.clone())
                 .chain(tau.get_scoped_vars())
                 .collect(),
-            _ => todo!(),
         }
     }
 
@@ -93,7 +92,6 @@ impl GetVars for Type {
             Type::Forall { a, tau } => std::iter::once(a.clone())
                 .chain(tau.get_all_vars())
                 .collect(),
-            _ => todo!(),
         }
     }
 }
@@ -115,16 +113,13 @@ impl Type {
                 arg: arg.instantiate().into(),
                 ret: ret.instantiate().into(),
             },
-            _ => todo!(),
         }
     }
 
-    fn generalize(self, ctx: &Vec<Type>, constraints: Vec<Constraint>) -> Result<Type, String> {
+    fn generalize(self, constraints: Vec<Constraint>) -> Result<Type, String> {
         let (uf, map) = unification(constraints)?;
-        let mut tau_x = get_type(self, uf, map);
-        for a in vec_diff(tau_x.get_free_vars(), ctx.get_free_vars()) {
-            tau_x = tau_x.add_one_quantifier(a);
-        }
+        let tau_x = get_type(self, uf, map);
+        assert!(tau_x.get_free_vars().is_empty());
         Ok(tau_x)
     }
 
@@ -391,12 +386,11 @@ impl Expr {
             // 7. polymorphism
             Expr::Let { e_x, e_in, .. } => {
                 let (tau_x, c_x) = e_x.get_constraints(ctx)?;
-                ctx.push(tau_x.generalize(ctx, c_x.clone())?);
+                ctx.push(tau_x.generalize(c_x.clone())?);
                 let (tau_in, c_in) = e_in.get_constraints(ctx)?;
                 let _ = ctx.pop().unwrap();
                 Ok((tau_in, flat!(vec![c_in, c_x])))
             }
-            _ => todo!(),
         }
     }
 

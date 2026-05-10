@@ -1,7 +1,7 @@
 use crate::{
     ast::*,
     ast_util::Symbol,
-    flags::{format_ast, Mode, OutputMode},
+    flags::{Mode, OutputMode, format_ast},
 };
 
 pub enum Outcome {
@@ -84,9 +84,7 @@ pub fn try_step(expr: &Expr) -> Outcome {
         | Expr::False
         | Expr::Pair { .. }
         | Expr::Unit
-        | Expr::Inject { .. }
-        | Expr::Export { .. }
-        | Expr::Fold { .. } => Outcome::Value,
+        | Expr::Inject { .. } => Outcome::Value,
         // 1. arithmetic
         Expr::Addop { binop, left, right } => free_fall!(
             eval_left!(binop, left, right, Addop),
@@ -241,32 +239,5 @@ pub fn try_step(expr: &Expr) -> Outcome {
                 arg: e_x.clone(),
             })
         }
-        // 8. recursive types
-        Expr::Unfold(e) => free_fall!(
-            (e, |e| Expr::Unfold(Box::new(e))),
-            match e.as_ref() {
-                Expr::Fold { e, .. } => Outcome::Step(*e.clone()),
-                _ => unreachable!(),
-            }
-        ),
-        // 9. existential types
-        Expr::Import {
-            x,
-            a,
-            e_mod,
-            e_body,
-        } => free_fall!(
-            (e_mod, |e_mod| Expr::Import {
-                x: x.clone(),
-                a: a.clone(),
-                e_mod: Box::new(e_mod),
-                e_body: e_body.clone(),
-            }),
-            match e_mod.as_ref() {
-                Expr::Export { e, .. } =>
-                    Outcome::Step(e_body.clone().substitute(x.clone(), *e.clone())),
-                _ => unreachable!(),
-            }
-        ),
     }
 }

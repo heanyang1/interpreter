@@ -54,26 +54,4 @@ mod tests {
         let fix = parse("letrec f = 5 in f 1").unwrap();
         assert!(type_check(&fix).is_err());
     }
-
-    #[test]
-    #[ignore]
-    fn fold() {
-        let fold = parse("fold 1 as rec a . a").unwrap();
-        assert!(type_check(&fold).is_err());
-        let fold = parse("fold 1 as num").unwrap();
-        assert!(type_check(&fold).is_err());
-        let unfold = parse("unfold 1").unwrap();
-        assert!(type_check(&unfold).is_err());
-    }
-
-    #[test]
-    #[ignore]
-    fn existential() {
-        let not_existential = parse("export 1 without num as num").unwrap();
-        assert!(type_check(&not_existential).is_err());
-        let existential = parse("export 1 without num as exists a . a -> num").unwrap();
-        assert!(type_check(&existential).is_err());
-        let import = parse("import (x, a) = 2 in a").unwrap();
-        assert!(type_check(&import).is_err());
-    }
 }

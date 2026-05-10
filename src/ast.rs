@@ -30,9 +30,7 @@ pub enum Type {
     Fn { arg: Box<Type>, ret: Box<Type> },
     Product { left: Box<Type>, right: Box<Type> },
     Sum { left: Box<Type>, right: Box<Type> },
-    Rec { a: Variable, tau: Box<Type> },
     Forall { a: Variable, tau: Box<Type> },
-    Exists { a: Variable, tau: Box<Type> },
 }
 
 impl Display for Type {
@@ -45,9 +43,7 @@ impl Display for Type {
             Type::Fn { arg, ret } => write!(f, "({} → {})", arg, ret),
             Type::Product { left, right } => write!(f, "{} * {}", left, right),
             Type::Sum { left, right } => write!(f, "{} + {}", left, right),
-            Type::Rec { a, tau } => write!(f, "μ {} . {}", a, tau),
             Type::Forall { a, tau } => write!(f, "∀ {} . {}", a, tau),
-            Type::Exists { a, tau } => write!(f, "∃ {} . {}", a, tau),
         }
     }
 }
@@ -177,22 +173,6 @@ pub enum Expr {
         e_x: Box<Expr>,
         e_in: Box<Expr>,
     },
-    Fold {
-        e: Box<Expr>,
-        tau: Box<Type>,
-    },
-    Unfold(Box<Expr>),
-    Export {
-        e: Box<Expr>,
-        tau_adt: Box<Type>,
-        tau_mod: Box<Type>,
-    },
-    Import {
-        x: Variable,
-        a: Variable,
-        e_mod: Box<Expr>,
-        e_body: Box<Expr>,
-    },
 }
 
 impl Display for Expr {
@@ -234,19 +214,6 @@ impl Display for Expr {
             Expr::Lam { x, e } => write!(f, "(λ {} -> {})", x, e),
             Expr::Let { x, e_x, e_in } => write!(f, "(let {x} = {e_x} in {e_in})"),
             Expr::Fix { x, e } => write!(f, "(fix {} -> {})", x, e),
-            Expr::Fold { e, .. } => write!(f, "(fold {} as ...)", e),
-            Expr::Unfold(e) => write!(f, "(unfold {})", e),
-            Expr::Export {
-                e,
-                tau_adt,
-                tau_mod,
-            } => write!(f, "(export {} without {} as {})", e, tau_adt, tau_mod),
-            Expr::Import {
-                x,
-                a,
-                e_mod,
-                e_body,
-            } => write!(f, "(import ({}, {}) = {} in {})", x, a, e_mod, e_body),
         }
     }
 }
