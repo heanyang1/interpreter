@@ -120,19 +120,11 @@ impl Type {
     }
 
     fn generalize(self, ctx: &Vec<Type>, constraints: Vec<Constraint>) -> Result<Type, String> {
-        println!("generalize: {self}");
         let (uf, map) = unification(constraints)?;
         let mut tau_x = get_type(self, uf, map);
-        println!(
-            "free: {} {}",
-            Printer(", ").print_it(tau_x.get_all_vars().iter()),
-            Printer(", ").print_it(ctx.get_all_vars().iter())
-        );
         for a in vec_diff(tau_x.get_free_vars(), ctx.get_free_vars()) {
             tau_x = tau_x.add_one_quantifier(a);
         }
-        println!("generalize_to: {tau_x}");
-        println!("============");
         Ok(tau_x)
     }
 
@@ -399,7 +391,6 @@ impl Expr {
             // 7. polymorphism
             Expr::Let { e_x, e_in, .. } => {
                 let (tau_x, c_x) = e_x.get_constraints(ctx)?;
-                println!("type check: let {e_x} in {e_in}");
                 ctx.push(tau_x.generalize(ctx, c_x.clone())?);
                 let (tau_in, c_in) = e_in.get_constraints(ctx)?;
                 let _ = ctx.pop().unwrap();
@@ -442,10 +433,6 @@ fn fresh_type_var() -> Type {
 fn unification(
     constraints: Vec<Constraint>,
 ) -> Result<(UnionFind<Variable>, HashMap<Variable, Type>), String> {
-    println!(
-        "unification: {}",
-        Printer(", ").print_it(constraints.iter())
-    );
     let variables: Vec<Variable> = constraints
         .iter()
         .flat_map(|c| vec![&c.type_l, &c.type_r])
@@ -563,30 +550,16 @@ fn unification(
         .into_iter()
         .map(|(x, y)| (uf.find(&x).unwrap().clone(), y))
         .collect();
-    println!("{uf}");
-    println!("{}", Printer(",").print_map(&updated_map));
-    println!("--------");
     Ok((uf, updated_map))
 }
 
 fn get_type(mut tau: Type, mut uf: UnionFind<Variable>, mut map: HashMap<Variable, Type>) -> Type {
     loop {
         let vars = tau.get_free_vars();
-        println!(
-            "get_type all: {}, scoped: {}",
-            Printer(", ").print_it(tau.get_all_vars().iter()),
-            Printer(", ").print_it(tau.get_scoped_vars().iter()),
-        );
         if vars.is_empty() {
             return tau;
         }
         let x = vars.first().unwrap();
-        println!(
-            "get_type {}, map: {}, free: {}, x: {x}",
-            tau,
-            Printer(", ").print_map(&map),
-            Printer(", ").print_it(vars.iter()),
-        );
         let r_opt = uf.find(x);
         if let Ok(r) = r_opt
             && x != r
