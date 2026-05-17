@@ -52,12 +52,12 @@ impl Symbol for Type {
     fn contains_var(&self, s: &Variable) -> bool {
         match self {
             Type::Num | Type::Bool | Type::Unit => false,
-            Type::Var(x) => x.clone() == s.clone(),
+            Type::Var(x) => x == s,
             Type::Product { left, right } | Type::Sum { left, right } => {
                 left.contains_var(s) || right.contains_var(s)
             }
             Type::Fn { arg, ret } => arg.contains_var(s) || ret.contains_var(s),
-            Type::Forall { a, tau } => a.clone() != s.clone() && tau.contains_var(s),
+            Type::Forall { a, tau } => a != s && tau.contains_var(s),
         }
     }
     fn to_debruijn_map(self, mut depth: HashMap<Variable, usize>) -> Self {
@@ -210,7 +210,7 @@ impl Symbol for Expr {
                 }
             }
             Expr::App { lam, arg } => trivial!(Expr, App, rename, substitute_map;; lam, arg;),
-            Expr::Var(v) => match rename.get(&v.clone()) {
+            Expr::Var(v) => match rename.get(&v) {
                 Some(val) => val.clone(),
                 None => Expr::Var(v),
             },
