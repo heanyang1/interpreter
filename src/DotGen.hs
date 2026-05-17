@@ -30,161 +30,179 @@ instance Monad Writer where
 tell :: String -> Writer ()
 tell = Writer ()
 
-newNode :: Show a => a -> NodeIndex -> String -> Writer NodeIndex
-newNode v parent color = do
-    let cur = newNodeIndex (name parent) (idx parent + 1)
+newNode :: Show a => a -> NodeIndex -> Int -> String -> Writer (NodeIndex, Int)
+newNode v parent nextIdx color = do
+    let cur = newNodeIndex (name parent) nextIdx
     tell $ "\t" ++ show (idx cur) ++ " [shape=point, width=0.1, color=\"" ++ color ++ "\"];\n" ++
            "\t" ++ show (idx parent) ++ " -> " ++ show (idx cur) ++
            " [label=" ++ show v ++ ", arrowhead=none, color=\"" ++
            color ++ "\", fontcolor=\"" ++ color ++ "\"];\n"
-    return cur
+    return (cur, nextIdx + 1)
 
 class ToGraph a where
-    toGraph :: a -> NodeIndex -> Writer ()
+    toGraph :: a -> NodeIndex -> Int -> Writer Int
 
 instance ToGraph Variable where
-    toGraph v parent = do
-        _ <- newNode (show v) parent "black"
-        return ()
+    toGraph v parent counter = do
+        (_, next) <- newNode (show v) parent counter "black"
+        return next
 
 instance ToGraph Expr where
-    toGraph e parent = case e of
+    toGraph e parent counter = case e of
         EVar _ -> do
-            _ <- newNode (show e) parent "red"
-            return ()
+            (_, next) <- newNode (show e) parent counter "red"
+            return next
         EDeBruijn _ -> do
-            _ <- newNode (show e) parent "red"
-            return ()
+            (_, next) <- newNode (show e) parent counter "red"
+            return next
         ENum _ -> do
-            _ <- newNode (show e) parent "red"
-            return ()
+            (_, next) <- newNode (show e) parent counter "red"
+            return next
         ETrue -> do
-            _ <- newNode (show e) parent "red"
-            return ()
+            (_, next) <- newNode (show e) parent counter "red"
+            return next
         EFalse -> do
-            _ <- newNode (show e) parent "red"
-            return ()
+            (_, next) <- newNode (show e) parent counter "red"
+            return next
         EUnit -> do
-            _ <- newNode (show e) parent "red"
-            return ()
+            (_, next) <- newNode (show e) parent counter "red"
+            return next
 
         EAddop op left right -> do
-            cur <- newNode (show op) parent "red"
-            toGraph left cur
-            toGraph right cur
+            (cur, next1) <- newNode (show op) parent counter "red"
+            next2 <- toGraph left cur next1
+            next3 <- toGraph right cur next2
+            return next3
 
         EMulop op left right -> do
-            cur <- newNode (show op) parent "red"
-            toGraph left cur
-            toGraph right cur
+            (cur, next1) <- newNode (show op) parent counter "red"
+            next2 <- toGraph left cur next1
+            next3 <- toGraph right cur next2
+            return next3
 
         EIf cond then_ else_ -> do
-            cur <- newNode "if" parent "red"
-            toGraph cond cur
-            toGraph then_ cur
-            toGraph else_ cur
+            (cur, next1) <- newNode "if" parent counter "red"
+            next2 <- toGraph cond cur next1
+            next3 <- toGraph then_ cur next2
+            next4 <- toGraph else_ cur next3
+            return next4
 
         ERelop op left right -> do
-            cur <- newNode (show op) parent "red"
-            toGraph left cur
-            toGraph right cur
+            (cur, next1) <- newNode (show op) parent counter "red"
+            next2 <- toGraph left cur next1
+            next3 <- toGraph right cur next2
+            return next3
 
         EAnd left right -> do
-            cur <- newNode "&&" parent "red"
-            toGraph left cur
-            toGraph right cur
+            (cur, next1) <- newNode "&&" parent counter "red"
+            next2 <- toGraph left cur next1
+            next3 <- toGraph right cur next2
+            return next3
 
         EOr left right -> do
-            cur <- newNode "||" parent "red"
-            toGraph left cur
-            toGraph right cur
+            (cur, next1) <- newNode "||" parent counter "red"
+            next2 <- toGraph left cur next1
+            next3 <- toGraph right cur next2
+            return next3
 
         EPair left right -> do
-            cur <- newNode "pair" parent "red"
-            toGraph left cur
-            toGraph right cur
+            (cur, next1) <- newNode "pair" parent counter "red"
+            next2 <- toGraph left cur next1
+            next3 <- toGraph right cur next2
+            return next3
 
         EApp lam arg -> do
-            cur <- newNode "app" parent "red"
-            toGraph lam cur
-            toGraph arg cur
+            (cur, next1) <- newNode "app" parent counter "red"
+            next2 <- toGraph lam cur next1
+            next3 <- toGraph arg cur next2
+            return next3
 
         ELam x e -> do
-            cur <- newNode "λ" parent "red"
-            toGraph x cur
-            toGraph e cur
+            (cur, next1) <- newNode "λ" parent counter "red"
+            next2 <- toGraph x cur next1
+            next3 <- toGraph e cur next2
+            return next3
 
         EFix x e -> do
-            cur <- newNode "fix" parent "red"
-            toGraph x cur
-            toGraph e cur
+            (cur, next1) <- newNode "fix" parent counter "red"
+            next2 <- toGraph x cur next1
+            next3 <- toGraph e cur next2
+            return next3
 
         EProject e d -> do
-            cur <- newNode (case d of L -> "P_left"; R -> "P_right") parent "red"
-            toGraph e cur
+            (cur, next1) <- newNode (case d of L -> "P_left"; R -> "P_right") parent counter "red"
+            next2 <- toGraph e cur next1
+            return next2
 
         EInject e d -> do
-            cur <- newNode (case d of L -> "I_left"; R -> "I_right") parent "red"
-            toGraph e cur
+            (cur, next1) <- newNode (case d of L -> "I_left"; R -> "I_right") parent counter "red"
+            next2 <- toGraph e cur next1
+            return next2
 
         ECase e xleft eleft xright eright -> do
-            cur <- newNode "case" parent "red"
-            toGraph e cur
-            toGraph xleft cur
-            toGraph eleft cur
-            toGraph xright cur
-            toGraph eright cur
+            (cur, next1) <- newNode "case" parent counter "red"
+            next2 <- toGraph e cur next1
+            next3 <- toGraph xleft cur next2
+            next4 <- toGraph eleft cur next3
+            next5 <- toGraph xright cur next4
+            next6 <- toGraph eright cur next5
+            return next6
 
         ELet x e_x e_in -> do
-            cur <- newNode "let" parent "red"
-            toGraph x cur
-            toGraph e_x cur
-            toGraph e_in cur
+            (cur, next1) <- newNode "let" parent counter "red"
+            next2 <- toGraph x cur next1
+            next3 <- toGraph e_x cur next2
+            next4 <- toGraph e_in cur next3
+            return next4
 
 instance ToGraph Type where
-    toGraph t parent = case t of
+    toGraph t parent counter = case t of
         TNum -> do
-            _ <- newNode (show t) parent "blue"
-            return ()
+            (_, next) <- newNode (show t) parent counter "blue"
+            return next
         TBool -> do
-            _ <- newNode (show t) parent "blue"
-            return ()
+            (_, next) <- newNode (show t) parent counter "blue"
+            return next
         TUnit -> do
-            _ <- newNode (show t) parent "blue"
-            return ()
+            (_, next) <- newNode (show t) parent counter "blue"
+            return next
         TVar _ -> do
-            _ <- newNode (show t) parent "blue"
-            return ()
+            (_, next) <- newNode (show t) parent counter "blue"
+            return next
 
         TProduct left right -> do
-            cur <- newNode "*" parent "blue"
-            toGraph left cur
-            toGraph right cur
+            (cur, next1) <- newNode "*" parent counter "blue"
+            next2 <- toGraph left cur next1
+            next3 <- toGraph right cur next2
+            return next3
 
         TSum left right -> do
-            cur <- newNode "+" parent "blue"
-            toGraph left cur
-            toGraph right cur
+            (cur, next1) <- newNode "+" parent counter "blue"
+            next2 <- toGraph left cur next1
+            next3 <- toGraph right cur next2
+            return next3
 
         TFn arg ret -> do
-            cur <- newNode "→" parent "blue"
-            toGraph arg cur
-            toGraph ret cur
+            (cur, next1) <- newNode "→" parent counter "blue"
+            next2 <- toGraph arg cur next1
+            next3 <- toGraph ret cur next2
+            return next3
 
         TForall a tau -> do
-            cur <- newNode "∀" parent "blue"
-            toGraph a cur
-            toGraph tau cur
+            (cur, next1) <- newNode "∀" parent counter "blue"
+            next2 <- toGraph a cur next1
+            next3 <- toGraph tau cur next2
+            return next3
 
 toDot :: Expr -> Maybe String -> String
 toDot ast name = case name of
     Just n ->
         let root = newNodeIndex (Just n) 0
-            result = toGraph (toDebruijn ast) root
+            result = toGraph (toDebruijn ast) root 1
         in "subgraph " ++ n ++ " {\n\t" ++ show (idx root) ++
            " [shape=point, width=0.1];\n" ++ output result ++ "}"
     Nothing ->
         let root = newNodeIndex Nothing 0
-            result = toGraph (toDebruijn ast) root
+            result = toGraph (toDebruijn ast) root 1
         in "digraph {\n\t" ++ show (idx root) ++
            " [shape=point, width=0.1];\n" ++ output result ++ "}"
