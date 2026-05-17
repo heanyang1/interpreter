@@ -4,3 +4,6 @@
 *.svg
 *.html
 *.lam
+*.hi
+*.o
+/dist-newstyle

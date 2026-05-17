@@ -1,0 +1,48 @@
+cabal-version: 3.14
+name: interpreter
+version: 0.1.0
+category: Programming
+build-type: Simple
+
+executable interpreter
+    main-is: Main.hs
+    hs-source-dirs: src
+    build-depends:
+        base >= 4.15,
+        parsec >= 3.1,
+        containers >= 0.6,
+        transformers >= 0.6,
+        mtl >= 2.3
+    default-language: Haskell2010
+    other-modules:
+        AST,
+        Parser,
+        TypeCheck,
+        Evaluate,
+        UnionFind,
+        ASTUtil,
+        Flags,
+        DotGen
+
+test-suite tests
+    type: exitcode-stdio-1.0
+    main-is: Test.hs
+    hs-source-dirs: test, src
+    build-depends:
+        base >= 4.15,
+        parsec >= 3.1,
+        containers >= 0.6,
+        transformers >= 0.6,
+        mtl >= 2.3,
+        HUnit >= 1.6
+    default-language: Haskell2010
+    other-modules:
+        AST,
+        Parser,
+        TypeCheck,
+        Evaluate,
+        UnionFind,
+        ASTUtil,
+        Flags,
+        DotGen,
+        TestRunner

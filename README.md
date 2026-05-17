@@ -1,44 +1,56 @@
 # Interpreter
 
-Rust implementation of [Stanford CS242 assignment 4 (fall 2019)](https://stanford-cs242.github.io/f19/assignments/assign4/)
+An interpreter for Lam, a simplified version of the language introduced in [Stanford CS 242: Programming Languages, Fall 2019](https://stanford-cs242.github.io/f19/assignments/assign4/).
 
-For those who are learning CS242 (fall 2019 version): you'd better NOT see my solution. Instead, use this project as skeleton code and reference solution. I have tried my best to make the experience similar to (but less painful than) using the original OCaml skeleton code. See the [wiki](https://github.com/heanyang1/interpreter/wiki#notes-for-assignment-takers) for detailed instructions.
+Features:
+- All features of Lam except recursive types and existential types
+- Hindley-Milner type inference system
+- Out
+
+For those who are learning CS242 (fall 2019 version): You can use this project as skeleton code for assignment 4. It's written in Rust so you don't need to learn a new language or using the official skeleton code that no longer compiles with newer versions of OCaml. See the [wiki](https://github.com/heanyang1/interpreter/wiki#notes-for-assignment-takers) for detailed instructions.
 
 ## Compile and Run
 
 Compile the interpreter:
 ```sh
-cargo build
+cabal build
 ```
 
-The binary can be found at `project_dir/target/debug/interpreter`.
-
-Alternatively, you can run `cargo run -- args` to run the interpreter with arguments `args`.
-
-Some examples:
+The binary can be found at `dist-newstyle/.../interpreter`:
 ```sh
-# show usage
-cargo run -- --help
-# evaluate code.lam and print the whole AST
-cargo run -- eval full code.lam
-# print the result as human-readable format (some types are ignored and unreachable nodes are pruned)
-cargo run -- eval simplified code.lam
-# print the evaluation steps as de Bruijn indices
-cargo run -- very-verbose de-bruijn code.lam
-# parse the expression and print its AST
-cargo run -- parse full code.lam
-# generate a nice picture of AST (requires graphviz)
-cargo run -- parse graphviz code.lam | dot -Tsvg > output.svg
+find dist-newstyle -name "interpreter" -type f
+```
+
+Alternatively, use `cabal run`:
+
+```sh
+# evaluate and print the result
+cabal run interpreter -- eval simplified code.lam
+# evaluate and print result as full AST
+cabal run interpreter -- eval full code.lam
+# parse and print the AST
+cabal run interpreter -- parse full code.lam
+# verbose: also print the type
+cabal run interpreter -- verbose simplified code.lam
+# generate graphviz output
+cabal run interpreter -- parse graphviz code.lam | dot -Tsvg > output.svg
+# read from stdin
+cat code.lam | cabal run interpreter -- eval simplified
 ```
 
 ## Example programs
 
-The examples are Python scripts that generates `.lam` source file. The interpreter can read from stdin so you can use pipe to see the result without generating a `.lam` file:
+The examples are Python scripts that generate `.lam` source files. The interpreter can read from stdin:
+
 ```sh
-python examples/queue.py | cargo run -- eval simplified
+python examples/queue.py | cabal run interpreter -- eval simplified
 ```
 
-Some results are very large (the largest AST has ~5k nodes) so it may take a very long time to generate picture or print step-by-step solution.
+## Tests
+
+```sh
+cabal test    # runs all 96 test cases
+```
 
 ## License
 
