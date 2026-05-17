@@ -71,73 +71,61 @@ instance ToGraph Expr where
         EAddop op left right -> do
             (cur, next1) <- newNode (show op) parent counter "red"
             next2 <- toGraph left cur next1
-            next3 <- toGraph right cur next2
-            return next3
+            toGraph right cur next2
 
         EMulop op left right -> do
             (cur, next1) <- newNode (show op) parent counter "red"
             next2 <- toGraph left cur next1
-            next3 <- toGraph right cur next2
-            return next3
+            toGraph right cur next2
 
         EIf cond then_ else_ -> do
             (cur, next1) <- newNode "if" parent counter "red"
             next2 <- toGraph cond cur next1
             next3 <- toGraph then_ cur next2
-            next4 <- toGraph else_ cur next3
-            return next4
+            toGraph else_ cur next3
 
         ERelop op left right -> do
             (cur, next1) <- newNode (show op) parent counter "red"
             next2 <- toGraph left cur next1
-            next3 <- toGraph right cur next2
-            return next3
+            toGraph right cur next2
 
         EAnd left right -> do
             (cur, next1) <- newNode "&&" parent counter "red"
             next2 <- toGraph left cur next1
-            next3 <- toGraph right cur next2
-            return next3
+            toGraph right cur next2
 
         EOr left right -> do
             (cur, next1) <- newNode "||" parent counter "red"
             next2 <- toGraph left cur next1
-            next3 <- toGraph right cur next2
-            return next3
+            toGraph right cur next2
 
         EPair left right -> do
             (cur, next1) <- newNode "pair" parent counter "red"
             next2 <- toGraph left cur next1
-            next3 <- toGraph right cur next2
-            return next3
+            toGraph right cur next2
 
         EApp lam arg -> do
             (cur, next1) <- newNode "app" parent counter "red"
             next2 <- toGraph lam cur next1
-            next3 <- toGraph arg cur next2
-            return next3
+            toGraph arg cur next2
 
         ELam x e -> do
             (cur, next1) <- newNode "λ" parent counter "red"
             next2 <- toGraph x cur next1
-            next3 <- toGraph e cur next2
-            return next3
+            toGraph e cur next2
 
         EFix x e -> do
             (cur, next1) <- newNode "fix" parent counter "red"
             next2 <- toGraph x cur next1
-            next3 <- toGraph e cur next2
-            return next3
+            toGraph e cur next2
 
         EProject e d -> do
             (cur, next1) <- newNode (case d of L -> "P_left"; R -> "P_right") parent counter "red"
-            next2 <- toGraph e cur next1
-            return next2
+            toGraph e cur next1
 
         EInject e d -> do
             (cur, next1) <- newNode (case d of L -> "I_left"; R -> "I_right") parent counter "red"
-            next2 <- toGraph e cur next1
-            return next2
+            toGraph e cur next1
 
         ECase e xleft eleft xright eright -> do
             (cur, next1) <- newNode "case" parent counter "red"
@@ -145,15 +133,13 @@ instance ToGraph Expr where
             next3 <- toGraph xleft cur next2
             next4 <- toGraph eleft cur next3
             next5 <- toGraph xright cur next4
-            next6 <- toGraph eright cur next5
-            return next6
+            toGraph eright cur next5
 
         ELet x e_x e_in -> do
             (cur, next1) <- newNode "let" parent counter "red"
             next2 <- toGraph x cur next1
             next3 <- toGraph e_x cur next2
-            next4 <- toGraph e_in cur next3
-            return next4
+            toGraph e_in cur next3
 
 instance ToGraph Type where
     toGraph t parent counter = case t of
@@ -173,26 +159,22 @@ instance ToGraph Type where
         TProduct left right -> do
             (cur, next1) <- newNode "*" parent counter "blue"
             next2 <- toGraph left cur next1
-            next3 <- toGraph right cur next2
-            return next3
+            toGraph right cur next2
 
         TSum left right -> do
             (cur, next1) <- newNode "+" parent counter "blue"
             next2 <- toGraph left cur next1
-            next3 <- toGraph right cur next2
-            return next3
+            toGraph right cur next2
 
         TFn arg ret -> do
             (cur, next1) <- newNode "→" parent counter "blue"
             next2 <- toGraph arg cur next1
-            next3 <- toGraph ret cur next2
-            return next3
+            toGraph ret cur next2
 
         TForall a tau -> do
             (cur, next1) <- newNode "∀" parent counter "blue"
             next2 <- toGraph a cur next1
-            next3 <- toGraph tau cur next2
-            return next3
+            toGraph tau cur next2
 
 toDot :: Expr -> Maybe String -> String
 toDot ast name = case name of

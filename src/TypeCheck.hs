@@ -247,9 +247,7 @@ getType tau uf mp =
                         Nothing -> getType (addOneQuantifier tau x) uf mp
   where
     substituteVars t = case t of
-        TVar v -> case Map.lookup v mp of
-            Just t' -> substituteVars t'
-            Nothing -> t
+        TVar v -> maybe t substituteVars (Map.lookup v mp)
         TFn a r -> TFn (substituteVars a) (substituteVars r)
         TProduct l r -> TProduct (substituteVars l) (substituteVars r)
         TSum l r -> TSum (substituteVars l) (substituteVars r)
