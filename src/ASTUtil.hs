@@ -10,13 +10,7 @@ class Symbol a where
     toDebruijn :: a -> a
     toDebruijnMap :: Map Variable Int -> a -> a
     toDebruijn = toDebruijnMap Map.empty
-    substitute :: Variable -> a -> a -> a
-    substitute v e = substituteMap (Map.singleton v e)
-    substituteMap :: Map Variable a -> a -> a
     containsVar :: Variable -> a -> Bool
-
-fresh :: Variable -> Variable
-fresh (Variable v) = Variable (v ++ "_")
 
 addDepth :: Map Variable Int -> [Variable] -> Map Variable Int
 addDepth = foldl (\ m v -> Map.insertWith (+) v 1 m)
@@ -45,20 +39,6 @@ instance Symbol Type where
         TForall a tau ->
             let newDepth = Map.insert a 0 (fmap (+1) depth)
             in TForall (Variable "_") (toDebruijnMap newDepth tau)
-
-    substituteMap rename t = case t of
-        TNum -> t
-        TBool -> t
-        TUnit -> t
-        TFn arg ret -> TFn (substituteMap rename arg) (substituteMap rename ret)
-        TProduct left right -> TProduct (substituteMap rename left) (substituteMap rename right)
-        TSum left right -> TSum (substituteMap rename left) (substituteMap rename right)
-        TVar v -> case Map.lookup v rename of
-            Just val -> val
-            Nothing -> TVar v
-        TForall a tau -> case Map.lookup a rename of
-            Just _ -> substituteMap rename tau
-            Nothing -> TForall a (substituteMap rename tau)
 
 instance Symbol Expr where
     containsVar s e = case e of
@@ -120,46 +100,6 @@ instance Symbol Expr where
         ELet x e_x e_in ->
             let depthX = Map.insert x 0 (fmap (+1) depth)
             in ELet (Variable "_") (toDebruijnMap depth e_x) (toDebruijnMap depthX e_in)
-
-    substituteMap rename e = case e of
-        ENum _ -> e
-        ETrue -> e
-        EFalse -> e
-        EUnit -> e
-        EDeBruijn _ -> e
-        EAddop op left right -> EAddop op (substituteMap rename left) (substituteMap rename right)
-        EMulop op left right -> EMulop op (substituteMap rename left) (substituteMap rename right)
-        EIf cond then_ else_ -> EIf (substituteMap rename cond) (substituteMap rename then_) (substituteMap rename else_)
-        ERelop op left right -> ERelop op (substituteMap rename left) (substituteMap rename right)
-        EAnd left right -> EAnd (substituteMap rename left) (substituteMap rename right)
-        EOr left right -> EOr (substituteMap rename left) (substituteMap rename right)
-        ELam x e' ->
-            let newX = fresh x
-                newRename = Map.insert x (EVar newX) rename
-            in ELam newX (substituteMap newRename e')
-        EApp lam arg -> EApp (substituteMap rename lam) (substituteMap rename arg)
-        EVar v -> case Map.lookup v rename of
-            Just val -> val
-            Nothing -> EVar v
-        EPair left right -> EPair (substituteMap rename left) (substituteMap rename right)
-        EProject e d -> EProject (substituteMap rename e) d
-        EInject e d -> EInject (substituteMap rename e) d
-        ECase e' xleft eleft xright eright ->
-            let newXleft = fresh xleft
-                newXright = fresh xright
-                newRename = Map.insert xleft (EVar newXleft) $
-                            Map.insert xright (EVar newXright) rename
-            in ECase (substituteMap newRename e')
-                     newXleft (substituteMap newRename eleft)
-                     newXright (substituteMap newRename eright)
-        EFix x e' ->
-            let newX = fresh x
-                newRename = Map.insert x (EVar newX) rename
-            in EFix newX (substituteMap newRename e')
-        ELet x e_x e_in ->
-            let newX = fresh x
-                newRename = Map.insert x (EVar newX) rename
-            in ELet newX (substituteMap newRename e_x) (substituteMap newRename e_in)
 
 getAllVars :: Type -> [Variable]
 getAllVars t = case t of

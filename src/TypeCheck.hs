@@ -45,8 +45,7 @@ instantiate t = case t of
 
 typeCheck :: Expr -> Either String Type
 typeCheck expr = do
-    let expr' = toDebruijn expr
-    let result0 = runStateT (getConstraints expr' []) 0
+    let result0 = runStateT (getConstraints expr []) 0
     case result0 of
         Left err -> Left err
         Right ((curType, constraints), _) -> do

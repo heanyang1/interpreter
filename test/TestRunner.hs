@@ -1,6 +1,7 @@
 module TestRunner where
 
 import AST
+import ASTUtil (Symbol(..))
 import Parser
 import TypeCheck
 import Evaluate
@@ -9,12 +10,12 @@ import Test.HUnit
 evalExpr :: String -> Either String Expr
 evalExpr s = case parse s of
     Left err -> Left err
-    Right e -> Right (eval e)
+    Right e -> Right (eval (toDebruijn e))
 
 checkType :: String -> Either String Type
 checkType s = case parse s of
     Left err -> Left err
-    Right e -> typeCheck e
+    Right e -> typeCheck (toDebruijn e)
 
 t :: String -> Expr -> Type -> Test
 t s val ty = TestCase $ do

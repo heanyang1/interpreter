@@ -55,7 +55,8 @@ run modeStr outputStr mpath = do
                 Right ast -> case m of
                     Parse -> putStrLn $ formatAst ast o Nothing
                     _ -> do
-                        case typeCheck ast of
+                        let dbAst = toDebruijn ast
+                        case typeCheck dbAst of
                             Left err -> die $ "Type error: " ++ err
                             Right ty -> do
                                 Control.Monad.when (m == Verbose || m == VeryVerbose)
@@ -68,7 +69,7 @@ run modeStr outputStr mpath = do
                                               Step e' -> do
                                                   putStrLn $ formatAst e' o (Just $ "step-" ++ show i)
                                                   printSteps (i + 1) e'
-                                        putStrLn $ formatAst ast o (Just "step-0")
-                                        printSteps 1 ast
-                                    _ -> putStrLn $ formatAst (eval ast) o (Just "last")
+                                        putStrLn $ formatAst dbAst o (Just "step-0")
+                                        printSteps 1 dbAst
+                                    _ -> putStrLn $ formatAst (eval dbAst) o (Just "last")
                                 Control.Monad.when (o == Graphviz) $ putStrLn "}"
