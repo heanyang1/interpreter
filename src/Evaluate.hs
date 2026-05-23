@@ -1,78 +1,90 @@
 module Evaluate where
 
 import AST
-import ASTUtil (Symbol(..))
+import ASTUtil (Symbol (..))
+
+data Outcome = Val | Step Expr
+
+tryStep :: Expr -> Outcome
+tryStep e = case e of
+  ENum _ -> Val
+  ETrue -> Val
+  EFalse -> Val
+  EUnit -> Val
+  ELam _ _ -> Val
+  EPair _ _ -> Val
+  EInject _ _ -> Val
+  EVar x -> error $ "Free variable " ++ show x ++ " should be caught by type checking"
+  EDeBruijn _ -> error "DeBruijn index should not appear in evaluation"
+  EAddop op left right ->
+    (left, \left' -> EAddop op left' right) |-> \() ->
+      (right, EAddop op left) |-> \() ->
+        case (left, right, op) of
+          (ENum l, ENum r, Add) -> Step (ENum (l + r))
+          (ENum l, ENum r, Sub) -> Step (ENum (l - r))
+          _ -> error $ "unreachable state: left=" ++ show left ++ "right=" ++ show right ++ "op=" ++ show op
+  EMulop op left right ->
+    (left, \left' -> EMulop op left' right) |-> \() ->
+      (right, EMulop op left) |-> \() ->
+        case (left, right, op) of
+          (ENum l, ENum r, Mul) -> Step (ENum (l * r))
+          (ENum l, ENum r, Div) -> Step (ENum (l `div` r))
+          _ -> error $ "unreachable state: left=" ++ show left ++ "right=" ++ show right ++ "op=" ++ show op
+  ERelop op left right ->
+    (left, \left' -> ERelop op left' right) |-> \() ->
+      (right, ERelop op left) |-> \() ->
+        case (left, right, op) of
+          (ENum l, ENum r, Lt) -> Step (if l < r then ETrue else EFalse)
+          (ENum l, ENum r, Gt) -> Step (if l > r then ETrue else EFalse)
+          (ENum l, ENum r, Eq) -> Step (if l == r then ETrue else EFalse)
+          _ -> error $ "unreachable state: left=" ++ show left ++ "right=" ++ show right ++ "op=" ++ show op
+  EIf cond then_ else_ ->
+    (cond, \cond' -> EIf cond' then_ else_) |-> \() ->
+      case cond of
+        ETrue -> Step then_
+        EFalse -> Step else_
+        _ -> error $ "unreachable state: cond=" ++ show cond
+  EAnd left right ->
+    (left, (`EAnd` right)) |-> \() ->
+      case left of
+        ETrue -> Step right
+        EFalse -> Step EFalse
+        _ -> error $ "unreachable state: left=" ++ show left
+  EOr left right ->
+    (left, (`EOr` right)) |-> \() ->
+      case left of
+        ETrue -> Step ETrue
+        EFalse -> Step right
+        _ -> error $ "unreachable state: left=" ++ show left
+  EApp lam arg ->
+    (lam, (`EApp` arg)) |-> \() ->
+      (arg, EApp lam) |-> \() ->
+        case lam of
+          ELam x body -> Step (substitute x arg body)
+          _ -> error $ "unreachable state: lam=" ++ show lam
+  EProject e d ->
+    (e, (`EProject` d)) |-> \() ->
+      case e of
+        EPair l _ | d == L -> Step l
+        EPair _ r | d == R -> Step r
+        _ -> error $ "unreachable state: e=" ++ show e
+  ECase e xleft eleft xright eright ->
+    (e, \e' -> ECase e' xleft eleft xright eright) |-> \() ->
+      case e of
+        EInject e' L -> Step (substitute xleft e' eleft)
+        EInject e' R -> Step (substitute xright e' eright)
+        _ -> error $ "unreachable state: e=" ++ show e
+  EFix x body -> Step (substitute x (EFix x body) body)
+  ELet x e_x e_in ->
+    (e_x, \e_x' -> ELet x e_x' e_in) |-> \() ->
+      Step (substitute x e_x e_in)
+
+(|->) :: (Expr, Expr -> Expr) -> (() -> Outcome) -> Outcome
+(e, hole) |-> next = case tryStep e of
+  Step e -> Step (hole e)
+  Val -> next ()
 
 eval :: Expr -> Expr
-eval e = case e of
-    EDeBruijn _ -> error "DeBruijn index should not appear in evaluation"
-    EVar x -> error $ "Free variable " ++ show x ++ " should be caught by type checking"
-    ENum _ -> e
-    ETrue -> e
-    EFalse -> e
-    EUnit -> e
-    ELam _ _ -> e
-    EPair _ _ -> e
-    EInject _ _ -> e
-
-    EAddop op left right ->
-        case (eval left, eval right, op) of
-            (ENum l, ENum r, Add) -> ENum (l + r)
-            (ENum l, ENum r, Sub) -> ENum (l - r)
-            _ -> error "type error in addition"
-
-    EMulop op left right ->
-        case (eval left, eval right, op) of
-            (ENum l, ENum r, Mul) -> ENum (l * r)
-            (ENum l, ENum r, Div) -> ENum (l `div` r)
-            _ -> error "type error in multiplication"
-
-    ERelop op left right ->
-        case (eval left, eval right, op) of
-            (ENum l, ENum r, Lt) -> if l < r then ETrue else EFalse
-            (ENum l, ENum r, Gt) -> if l > r then ETrue else EFalse
-            (ENum l, ENum r, Eq) -> if l == r then ETrue else EFalse
-            _ -> error "type error in relation"
-
-    EIf cond then_ else_ ->
-        case eval cond of
-            ETrue -> eval then_
-            EFalse -> eval else_
-            _ -> error "type error in if"
-
-    EAnd left right ->
-        case eval left of
-            ETrue -> case eval right of
-                ETrue -> ETrue
-                _ -> EFalse
-            EFalse -> EFalse
-            _ -> error "type error in &&"
-
-    EOr left right ->
-        case eval left of
-            ETrue -> ETrue
-            EFalse -> case eval right of
-                EFalse -> EFalse
-                _ -> ETrue
-            _ -> error "type error in ||"
-
-    EApp lam arg ->
-        case eval lam of
-            ELam x body -> eval (substitute x (eval arg) body)
-            _ -> error "type error in application"
-
-    EProject e d ->
-        case eval e of
-            EPair l _ | d == L -> eval l
-            EPair _ r | d == R -> eval r
-            _ -> error "type error in projection"
-
-    ECase e xleft eleft xright eright ->
-        case eval e of
-            EInject e' L -> eval (substitute xleft e' eleft)
-            EInject e' R -> eval (substitute xright e' eright)
-            _ -> error "type error in case"
-
-    EFix x body -> eval (substitute x (EFix x body) body)
-
-    ELet x e_x e_in -> eval (EApp (ELam x e_in) e_x)
+eval e = case tryStep e of
+  Val -> e
+  Step e' -> eval e'

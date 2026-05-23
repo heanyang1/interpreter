@@ -61,5 +61,14 @@ run modeStr outputStr mpath = do
                                 Control.Monad.when (m == Verbose || m == VeryVerbose)
                                     $ putStrLn $ formatType ty o
                                 Control.Monad.when (o == Graphviz) $ putStrLn "digraph Program {"
-                                putStrLn $ formatAst (eval ast) o (Just "last")
+                                case m of
+                                    VeryVerbose -> do
+                                        let printSteps i e = case tryStep e of
+                                              Val -> return ()
+                                              Step e' -> do
+                                                  putStrLn $ formatAst e' o (Just $ "step-" ++ show i)
+                                                  printSteps (i + 1) e'
+                                        putStrLn $ formatAst ast o (Just "step-0")
+                                        printSteps 1 ast
+                                    _ -> putStrLn $ formatAst (eval ast) o (Just "last")
                                 Control.Monad.when (o == Graphviz) $ putStrLn "}"
