@@ -11,7 +11,18 @@ cabal run interpreter -- parse simplified  # read from stdin
 ## Tests
 
 ```sh
-cabal test           # run all tests (96 test cases)
+cabal test           # run all tests (207 test cases)
+cabal test --enable-coverage  # run tests with HPC coverage
+# View coverage report (open hpc_index.html in browser or run below):
+hpc report dist-newstyle/build/x86_64-linux/ghc-9.6.7/interpreter-0.1.0/t/tests/hpc/vanilla/tix/tests.tix \
+  --hpcdir=dist-newstyle/build/x86_64-linux/ghc-9.6.7/interpreter-0.1.0/build/extra-compilation-artifacts/hpc/vanilla/mix \
+  --hpcdir=dist-newstyle/build/x86_64-linux/ghc-9.6.7/interpreter-0.1.0/t/tests/build/tests/tests-tmp/extra-compilation-artifacts/hpc/vanilla/mix \
+  --reset-hpcdirs
+# Per-module breakdown:
+hpc report dist-newstyle/build/x86_64-linux/ghc-9.6.7/interpreter-0.1.0/t/tests/hpc/vanilla/tix/tests.tix \
+  --hpcdir=dist-newstyle/build/x86_64-linux/ghc-9.6.7/interpreter-0.1.0/build/extra-compilation-artifacts/hpc/vanilla/mix \
+  --hpcdir=dist-newstyle/build/x86_64-linux/ghc-9.6.7/interpreter-0.1.0/t/tests/build/tests/tests-tmp/extra-compilation-artifacts/hpc/vanilla/mix \
+  --reset-hpcdirs --per-module
 ```
 
 ## CLI

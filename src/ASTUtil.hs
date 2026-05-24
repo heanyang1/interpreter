@@ -3,29 +3,13 @@ module ASTUtil where
 import AST
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.List ((\\), union, foldl')
-import Data.Maybe (fromMaybe)
 
 class Symbol a where
     toDebruijn :: a -> a
     toDebruijnMap :: Map Variable Int -> a -> a
     toDebruijn = toDebruijnMap Map.empty
-    containsVar :: Variable -> a -> Bool
-
-addDepth :: Map Variable Int -> [Variable] -> Map Variable Int
-addDepth = foldl (\ m v -> Map.insertWith (+) v 1 m)
 
 instance Symbol Type where
-    containsVar s t = case t of
-        TNum -> False
-        TBool -> False
-        TUnit -> False
-        TVar x -> x == s
-        TProduct left right -> containsVar s left || containsVar s right
-        TSum left right -> containsVar s left || containsVar s right
-        TFn arg ret -> containsVar s arg || containsVar s ret
-        TForall a tau -> a /= s && containsVar s tau
-
     toDebruijnMap depth t = case t of
         TNum -> t
         TBool -> t
@@ -41,29 +25,6 @@ instance Symbol Type where
             in TForall (Variable "_") (toDebruijnMap newDepth tau)
 
 instance Symbol Expr where
-    containsVar s e = case e of
-        ENum _ -> False
-        ETrue -> False
-        EFalse -> False
-        EUnit -> False
-        EDeBruijn _ -> False
-        EAddop _ left right -> containsVar s left || containsVar s right
-        EMulop _ left right -> containsVar s left || containsVar s right
-        EIf cond then_ else_ -> containsVar s cond || containsVar s then_ || containsVar s else_
-        ERelop _ left right -> containsVar s left || containsVar s right
-        EAnd left right -> containsVar s left || containsVar s right
-        EOr left right -> containsVar s left || containsVar s right
-        EVar v -> v == s
-        ELam x e -> x /= s && containsVar s e
-        EApp lam arg -> containsVar s lam || containsVar s arg
-        EPair left right -> containsVar s left || containsVar s right
-        EProject e _ -> containsVar s e
-        EInject e _ -> containsVar s e
-        ECase e xleft eleft xright eright ->
-            containsVar s e || (xleft /= s && containsVar s eleft) || (xright /= s && containsVar s eright)
-        EFix x e -> x /= s && containsVar s e
-        ELet x e_x e_in -> containsVar s e_x || (x /= s && containsVar s e_in)
-
     toDebruijnMap depth e = case e of
         ENum _ -> e
         ETrue -> e

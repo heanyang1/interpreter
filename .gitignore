@@ -7,3 +7,4 @@
 *.hi
 *.o
 /dist-newstyle
+.hpc

@@ -2,11 +2,10 @@ module TypeCheck where
 
 import AST
 import ASTUtil hiding (containsVar, instantiate)
-import qualified ASTUtil
 import UnionFind
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.List (nub, (\\))
+import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import Control.Monad.Trans.State.Strict hiding (put)
 import Control.Monad.Trans.Class (lift)
@@ -210,15 +209,17 @@ unification' uf mp (c:cs) = case (typeL c, typeR c) of
             (Just lv, Just rv) ->
                 let newC = Constraint lv rv (show lv) (show rv)
                 in unification' uf' mp (newC : cs)
-    (TVar v, t) -> if not (containsVar v t)
-        then case Map.lookup v mp of
-            Nothing -> do
-                let mp' = Map.insert v t mp
-                unification' uf mp' cs
-            Just oldT -> do
-                let newC = Constraint oldT t (show oldT) (show t)
-                unification' uf mp (newC : cs)
-        else Left $ "Unification failed: " ++ show (typeL c) ++ " and " ++ show (typeR c)
+    (TVar v, t) -> do
+        let vRoot = case find uf v of Right x -> x; Left _ -> v
+        if not (containsVar v t)
+            then case Map.lookup vRoot mp of
+                Nothing -> do
+                    let mp' = Map.insert vRoot t mp
+                    unification' uf mp' cs
+                Just oldT -> do
+                    let newC = Constraint oldT t (show oldT) (show t)
+                    unification' uf mp (newC : cs)
+            else Left $ "Unification failed: " ++ show (typeL c) ++ " and " ++ show (typeR c)
     (t, TVar v) -> unification' uf mp (Constraint (typeR c) (typeL c) (exprR c) (exprL c) : cs)
     (TFn a1 r1, TFn a2 r2) ->
         let newCs = [Constraint a1 a2 (show a1) (show a2), Constraint r1 r2 (show r1) (show r2)]

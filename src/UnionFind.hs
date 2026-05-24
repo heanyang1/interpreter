@@ -6,9 +6,6 @@ import qualified Data.Map.Strict as Map
 import Data.List (foldl')
 import GHC.Generics (Generic)
 
-instance Eq a => Eq (UnionFind a) where
-    _ == _ = False
-
 data UnionFind a = UnionFind
     { parent :: Map a a
     , rank :: Map a Int
