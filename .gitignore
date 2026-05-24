@@ -8,3 +8,4 @@
 *.o
 /dist-newstyle
 .hpc
+opencode.jsonc

@@ -42,7 +42,14 @@ Python scripts in `examples/` generate `.lam` source. Run via pipe:
 python examples/queue.py | cabal run interpreter -- eval simplified
 ```
 
+## Formal Proof (Lean 4)
+
+Progress and preservation theorems mechanized in `proof/Proof/Basic.lean`:
+```sh
+source ~/.elan/env && cd proof && lake build
+```
+
 ## Notes
 
 - Uses Haskell (GHC 9.6.7), cabal build system
-- Output formats match Rust original: `full`, `simplified`, `debruijn`, `graphviz`
+- Lean 4 toolchain at `~/.elan`

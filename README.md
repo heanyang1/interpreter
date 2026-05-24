@@ -6,6 +6,7 @@ Features:
 - All features of Lam except recursive types and existential types
 - Hindley-Milner type inference system
 - Generating [graphviz](https://graphviz.org/) code of AST
+- Its type safety is [formally verified](proof/) using Lean 4.
 
 For those who are learning CS242 (fall 2019 version): You can use this project as skeleton code for assignment 4. It's written in Rust so you don't need to learn a new language or using the official skeleton code that no longer compiles with newer versions of OCaml. See the [wiki](https://github.com/heanyang1/interpreter/wiki#notes-for-assignment-takers) for detailed instructions.
 
