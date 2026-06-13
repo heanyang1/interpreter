@@ -326,27 +326,27 @@ theorem progress (e : Expr) (τ : Ty) (h : Typing [] e τ) : Value e ∨ ∃ e',
 theorem get_append_singleton {Γ : List Ty} {σ : Ty} {j : Fin ((Γ ++ [σ]).length)} (h_eq : j.val = Γ.length) : (Γ ++ [σ]).get j = σ := by
   induction Γ with
   | nil => simp
-  | cons τ Γ ih =>
+  | cons τ Γ' ih =>
     cases j; rename_i val isLt
     cases val with
-    | zero => have : 0 = (τ :: Γ).length := h_eq; simp at this
+    | zero => have : 0 = (τ :: Γ').length := h_eq; simp at this
     | succ n =>
-      have h_lt : n < (Γ ++ [σ]).length := by
-        have : n.succ < ((τ :: Γ) ++ [σ]).length := isLt; simpa using this
-      have h_eq' : n = Γ.length := by simp at h_eq; exact h_eq
+      have h_lt : n < (Γ' ++ [σ]).length := by
+        have : n.succ < ((τ :: Γ') ++ [σ]).length := isLt; simpa using this
+      have h_eq' : n = Γ'.length := by simp at h_eq; exact h_eq
       simpa using ih (j := ⟨n, h_lt⟩) h_eq'
 
 theorem get_append_left {Γ Δ : List Ty} {i : Fin Γ.length} {hi : i.val < (Γ ++ Δ).length} : (Γ ++ Δ).get ⟨i.val, hi⟩ = Γ.get i := by
   induction Γ with
   | nil => exact Fin.elim0 i
-  | cons τ Γ ih =>
+  | cons τ Γ' ih =>
     cases i; rename_i val isLt
     cases val with
     | zero => rfl
     | succ n =>
-      have h_n_lt : n < Γ.length := by simp at isLt; exact isLt
-      have hi_n : n < (Γ ++ Δ).length := by
-        have : n.succ < ((τ :: Γ) ++ Δ).length := hi; simpa using this
+      have h_n_lt : n < Γ'.length := by simp at isLt; exact isLt
+      have hi_n : n < (Γ' ++ Δ).length := by
+        have : n.succ < ((τ :: Γ') ++ Δ).length := hi; simpa using this
       simpa using ih (i := ⟨n, h_n_lt⟩) (hi := hi_n)
 
 theorem weakening {Γ' : List Ty} {e : Expr} {τ : Ty} (h : Typing Γ' e τ) (Δ : List Ty) : Typing (Γ' ++ Δ) e τ := by
@@ -367,10 +367,9 @@ theorem weakening {Γ' : List Ty} {e : Expr} {τ : Ty} (h : Typing Γ' e τ) (Δ
       have h_len : Γ.length ≤ (Γ ++ Δ).length := by simp
       exact Nat.lt_of_lt_of_le h_i_lt h_len
     let i' : Fin (Γ ++ Δ).length := ⟨i.val, hi⟩
-    have hget_val : (Γ ++ Δ).get i' = Γ.get i := get_append_left (i := i) (hi := hi)
-    have hget' : (Γ ++ Δ).get i' = some τ := (congrArg (fun t : Ty => some t) hget_val).trans hget
+    have hget' : (Γ ++ Δ).get i' = some τ := (congrArg some get_append_left).trans hget
     exact Typing.var (Γ ++ Δ) i' τ hget'
-  | lam Γ τ₁ e τ₂ hb ih => exact Typing.lam (Γ ++ Δ) τ₁ e τ₂ (by simpa [List.append_assoc] using ih Δ)
+  | lam Γ τ₁ e τ₂ hb ih => exact Typing.lam (Γ ++ Δ) τ₁ e τ₂ (by simpa using ih Δ)
   | app Γ f a τ₁ τ₂ hf ha ih_f ih_a => exact Typing.app (Γ ++ Δ) f a τ₁ τ₂ (ih_f Δ) (ih_a Δ)
   | pair Γ l r τ₁ τ₂ hl hr ih_l ih_r => exact Typing.pair (Γ ++ Δ) l r τ₁ τ₂ (ih_l Δ) (ih_r Δ)
   | projL Γ e τ₁ τ₂ he ih => exact Typing.projL (Γ ++ Δ) e τ₁ τ₂ (ih Δ)
@@ -378,12 +377,12 @@ theorem weakening {Γ' : List Ty} {e : Expr} {τ : Ty} (h : Typing Γ' e τ) (Δ
   | injL Γ e τ τ' he ih => exact Typing.injL (Γ ++ Δ) e τ τ' (ih Δ)
   | injR Γ e τ τ' he ih => exact Typing.injR (Γ ++ Δ) e τ τ' (ih Δ)
   | case_ Γ e el er τL τR τ hse hel her ih_se ih_el ih_er =>
-    have h_el : Typing ([τL] ++ (Γ ++ Δ)) el τ := by simpa [List.append_assoc] using ih_el Δ
-    have h_er : Typing ([τR] ++ (Γ ++ Δ)) er τ := by simpa [List.append_assoc] using ih_er Δ
+    have h_el : Typing ([τL] ++ (Γ ++ Δ)) el τ := by simpa using ih_el Δ
+    have h_er : Typing ([τR] ++ (Γ ++ Δ)) er τ := by simpa using ih_er Δ
     exact Typing.case_ (Γ ++ Δ) e el er τL τR τ (ih_se Δ) h_el h_er
-  | fix_ Γ τ e hb ih => exact Typing.fix_ (Γ ++ Δ) τ e (by simpa [List.append_assoc] using ih Δ)
+  | fix_ Γ τ e hb ih => exact Typing.fix_ (Γ ++ Δ) τ e (by simpa using ih Δ)
   | let_ Γ e₁ e₂ τ₁ τ₂ h₁ h₂ ih₁ ih₂ =>
-    have h₂' : Typing ([τ₁] ++ (Γ ++ Δ)) e₂ τ₂ := by simpa [List.append_assoc] using ih₂ Δ
+    have h₂' : Typing ([τ₁] ++ (Γ ++ Δ)) e₂ τ₂ := by simpa using ih₂ Δ
     exact Typing.let_ (Γ ++ Δ) e₁ e₂ τ₁ τ₂ (ih₁ Δ) h₂'
 
 theorem subst_typing (s e : Expr) (τ σ : Ty) (Γ : List Ty)
@@ -415,14 +414,13 @@ theorem subst_typing (s e : Expr) (τ σ : Ty) (Γ : List Ty)
     · have h_lt : hi.val < Γ.length := by
         have h_bound : hi.val < (Γ ++ [σ]).length := hi.isLt
         have h_len : (Γ ++ [σ]).length = Γ.length + 1 := by simp
-        have : hi.val < Γ.length + 1 := by simpa [h_len] using h_bound
+        have : hi.val < Γ.length + 1 := by simpa using h_bound
         omega
       simp [subst, h_eq]
-      have hget' : some (Γ.get ⟨hi.val, h_lt⟩) = some τ := by
+      have hget' : Γ.get ⟨hi.val, h_lt⟩ = some τ := by
         have h_val : (Γ ++ [σ]).get hi = Γ.get ⟨hi.val, h_lt⟩ :=
           get_append_left (i := ⟨hi.val, h_lt⟩) (hi := hi.isLt)
-        have heq : some ((Γ ++ [σ]).get hi) = some (Γ.get ⟨hi.val, h_lt⟩) := congrArg some h_val
-        exact heq.symm ▸ hget
+        exact h_val.symm ▸ hget
       exact Typing.var Γ ⟨hi.val, h_lt⟩ τ hget'
   | lam τ₁ body ih => cases h_e; case lam =>
     simp [subst]; rename_i τ₂ hb; apply Typing.lam Γ τ₁ _ τ₂ (ih τ₂ (τ₁ :: Γ) hb)
@@ -449,8 +447,8 @@ theorem subst_typing (s e : Expr) (τ σ : Ty) (Γ : List Ty)
       simp [subst]
       apply Typing.case_ Γ _ _ _ τL τR τ'
         (ih_scrut (Ty.sum τL τR) Γ hse)
-        (ih_el τ' (τL :: Γ) (by simpa [List.append_assoc] using hel))
-        (ih_er τ' (τR :: Γ) (by simpa [List.append_assoc] using her))
+        (ih_el τ' (τL :: Γ) (by simpa using hel))
+        (ih_er τ' (τR :: Γ) (by simpa using her))
   | fix_ τ₁ body ih =>
     match h_e with
     | Typing.fix_ _ _ _ hb =>
@@ -459,8 +457,8 @@ theorem subst_typing (s e : Expr) (τ σ : Ty) (Γ : List Ty)
   | let_ e₁ e₂ ih₁ ih₂ =>
     match h_e with
     | Typing.let_ _ _ _ τ₁ τ₂ h₁ h₂ =>
-      simp [subst]; apply Typing.let_ Γ _ _ τ₁ τ₂ (ih₁ τ₁ Γ h₁) (ih₂ τ₂ (τ₁ :: Γ) (by
-        simpa [List.append_assoc] using h₂))
+      simp [subst]
+      apply Typing.let_ Γ _ _ τ₁ τ₂ (ih₁ τ₁ Γ h₁) (ih₂ τ₂ (τ₁ :: Γ) (by simpa using h₂))
 
 /- ========================================================================== Preservation ========================================================================== -/
 
