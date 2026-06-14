@@ -109,7 +109,7 @@ instance ToGraph Expr where
             next2 <- toGraph lam cur next1
             toGraph arg cur next2
 
-        ELam x e -> do
+        ELam x _ e -> do
             (cur, next1) <- newNode "λ" parent counter "red"
             next2 <- toGraph x cur next1
             toGraph e cur next2
@@ -135,7 +135,7 @@ instance ToGraph Expr where
             next5 <- toGraph xright cur next4
             toGraph eright cur next5
 
-        ELet x e_x e_in -> do
+        ELet x _ e_x e_in -> do
             (cur, next1) <- newNode "let" parent counter "red"
             next2 <- toGraph x cur next1
             next3 <- toGraph e_x cur next2

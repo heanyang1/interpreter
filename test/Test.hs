@@ -1,4 +1,5 @@
 import AST
+import ASTUtil (Symbol(..))
 import qualified Data.Map.Strict as Map
 import Data.List (isPrefixOf, isInfixOf)
 import Evaluate
@@ -32,7 +33,8 @@ allTests =
       testTryStep,
       testShowInstances,
       testTypeCheckUtil,
-      testParseErrors
+      testParseErrors,
+      testAnnotations
     ]
 
 -- Parser
@@ -43,7 +45,7 @@ testParser =
       [ TestLabel "lam_app" $ TestCase $ do
           case parse "fun x -> x y" of
             Left err -> assertFailure err
-            Right (ELam _ (EApp (EVar _) (EVar _))) -> return ()
+            Right (ELam _ _ (EApp (EVar _) (EVar _))) -> return ()
             Right e -> assertFailure $ "Unexpected AST: " ++ show e
           case (parse "x y z", parse "((x y) z)") of
             (Right e1, Right e2) -> assertEqual "app assoc" e1 e2
@@ -374,6 +376,36 @@ testTypePreservation =
           TestList
             [ tStep "fix f -> (fun x -> x + 1)",
               tStep "(fix f -> (fun x -> x + 1)) 5"
+            ],
+        TestLabel "and_or_step" $
+          TestList
+            [ tStep "true && false",
+              tStep "false || true",
+              tStep "true && (1 == 1)",
+              tStep "false || (1 == 2)"
+            ],
+        TestLabel "project_both" $
+          TestList
+            [ tStep "(1, 2).L",
+              tStep "(1, 2).R"
+            ],
+        TestLabel "case_both" $
+          TestList
+            [ tStep "case (inj 1 = L) {L(x) -> x | R(y) -> 3 * y}",
+              tStep "case (inj 1 = R) {L(y) -> 3 | R(x) -> x * 2}"
+            ],
+        TestLabel "subst_and_or" $
+          TestList
+            [ tStep "let x = true in x && (2 == 2)",
+              tStep "let x = false in x || (1 == 2)",
+              tStep "(fun x -> x && true) true",
+              tStep "(fun x -> x || false) false"
+            ],
+        TestLabel "subst_all" $
+          TestList
+            [ tStep "let x = 1 / 2 in x + 1",
+              tStep "let x = (1, true).L in x",
+              tStep "let x = (1, true).R in x"
             ]
       ]
 
@@ -558,7 +590,7 @@ testTryStep =
               _ -> assertFailure "EDeBruijn should be Val",
         TestLabel "ELam" $
           TestCase $
-            case tryStep (ELam (Variable "x") (ENum 1)) of
+            case tryStep (ELam (Variable "x") Nothing (ENum 1)) of
               Val -> return ()
               _ -> assertFailure "ELam should be Val",
         TestLabel "EPair" $
@@ -572,9 +604,9 @@ testTryStep =
               Val -> return ()
               _ -> assertFailure "EInject should be Val",
         TestLabel "deBruijnSubst_outside_ref" $ TestCase $ do
-          let e = EApp (ELam (Variable "_") (EApp (ELam (Variable "_") (EDeBruijn 1)) (ENum 1))) (ENum 2)
+          let e = EApp (ELam (Variable "_") Nothing (EApp (ELam (Variable "_") Nothing (EDeBruijn 1)) (ENum 1))) (ENum 2)
           case tryStep e of
-            Step e' -> assertEqual "outer app step" (EApp (ELam (Variable "_") (ENum 2)) (ENum 1)) e'
+            Step e' -> assertEqual "outer app step" (EApp (ELam (Variable "_") Nothing (ENum 2)) (ENum 1)) e'
             _ -> assertFailure "Expected Step",
         TestLabel "parseError" $ tParseError "let in",
         TestLabel "keyword_as_var" $ tParseError "fun let -> x"
@@ -617,7 +649,7 @@ testShowInstances =
         TestLabel "project_non_pair" $ TestCase $ do
           assertEqual "project on var" "x.L" (show (EProject (EVar (Variable "x")) L)),
         TestLabel "eapp_show" $ TestCase $ do
-          let e = EApp (ELam (Variable "x") (EVar (Variable "x"))) (ENum 1)
+          let e = EApp (ELam (Variable "x") Nothing (EVar (Variable "x"))) (ENum 1)
           assertEqual "show EApp" "((λ x -> x) 1)" (show e),
         TestLabel "inject_show" $ TestCase $ do
           assertEqual "inject" "1" (show (EInject (ENum 1) L)),
@@ -643,7 +675,7 @@ testShowInstances =
         TestLabel "eunit" $ TestCase $ do
           assertEqual "EUnit" "()" (show EUnit),
         TestLabel "free_var_in_ast" $ TestCase $ do
-          assertEqual "free var not bound" "(λ x -> (x y))" (show (ELam (Variable "x") (EApp (EVar (Variable "x")) (EVar (Variable "y"))))),
+          assertEqual "free var not bound" "(λ x -> (x y))" (show (ELam (Variable "x") Nothing (EApp (EVar (Variable "x")) (EVar (Variable "y"))))),
         TestLabel "debruijn_output_type" $ TestCase $ do
           case checkType "let id = fun x -> x in id" of
             Left err -> assertFailure err
@@ -742,4 +774,147 @@ testParseErrors =
             case parse "(@" of
               Left _ -> return ()
               Right e -> assertFailure $ "Expected parse error, got " ++ show e
+      ]
+
+-- Type annotations
+testAnnotations :: Test
+testAnnotations =
+  TestLabel "Annotations" $
+    TestList
+      [ TestLabel "lam_simple" $
+          TestList
+            [ tType "fun (x : num) -> x + 1" (TFn TNum TNum)
+            ],
+        TestLabel "lam_parse" $ TestCase $ do
+          case parse "fun (x : num) -> x + 1" of
+            Left err -> assertFailure err
+            Right e -> assertEqual "parse lam annotation" (ELam (Variable "x") (Just TNum) (EAddop Add (EVar (Variable "x")) (ENum 1))) e,
+        TestLabel "lam_parse_unannotated" $ TestCase $ do
+          case parse "fun x -> x" of
+            Left err -> assertFailure err
+            Right e -> assertEqual "parse lam no annotation" (ELam (Variable "x") Nothing (EVar (Variable "x"))) e,
+        TestLabel "let_parse" $ TestCase $ do
+          case parse "let x : num = 1 in x + 2" of
+            Left err -> assertFailure err
+            Right e -> assertEqual "parse let annotation" (ELet (Variable "x") (Just TNum) (ENum 1) (EAddop Add (EVar (Variable "x")) (ENum 2))) e,
+        TestLabel "let_parse_unannotated" $ TestCase $ do
+          case parse "let x = 1 in x" of
+            Left err -> assertFailure err
+            Right e -> assertEqual "parse let no annotation" (ELet (Variable "x") Nothing (ENum 1) (EVar (Variable "x"))) e,
+        TestLabel "lam_typecheck" $
+          TestList
+            [ tType "fun (x : num) -> x + 1" (TFn TNum TNum),
+              tType "fun (x : num) -> x" (TFn TNum TNum),
+              tType "fun (x : bool) -> x" (TFn TBool TBool),
+              tType "fun (x : num) -> fun (y : num) -> x + y" (TFn TNum (TFn TNum TNum))
+            ],
+        TestLabel "let_typecheck" $
+          TestList
+            [ tType "let x : num = 1 in x" TNum,
+              tType "let x : num = 1 in x + 2" TNum,
+              tType "let id : num -> num = fun x -> x in id 1" TNum,
+              tType "let id : num -> num = fun x -> x in id 1" TNum
+            ],
+        TestLabel "lam_eval" $
+          TestList
+            [ t "(fun (x : num) -> x + 1) 5" (ENum 6) TNum,
+              t "let f = fun (x : num) -> x + 1 in f 5" (ENum 6) TNum,
+              t "(fun (f : num -> num) -> f 5) (fun x -> x + 1)" (ENum 6) TNum
+            ],
+        TestLabel "let_eval" $
+          TestList
+            [ t "let x : num = 3 in x + 2" (ENum 5) TNum,
+              t "let id : num -> num = fun (x : num) -> x in id 5" (ENum 5) TNum
+            ],
+        TestLabel "complex_types" $
+          TestList
+            [ tType "fun (f : num -> num) -> f 0" (TFn (TFn TNum TNum) TNum),
+              tType "let p : num * bool = (1, true) in p.L" TNum,
+              tType "let p : num * bool = (1, true) in p.R" TBool,
+              tType "fun (x : num * bool) -> x" (TFn (TProduct TNum TBool) (TProduct TNum TBool)),
+              tType "let x : () = () in x" TUnit
+            ],
+        TestLabel "type_errors" $
+          TestList
+            [ tTypeError "fun (x : bool) -> x + 1",
+              tTypeError "fun (x : num) -> x && true",
+              tTypeError "let x : num = true in x",
+              tTypeError "let x : bool = 1 in x",
+              tTypeError "fun (x : num -> bool) -> x + 1"
+            ],
+        TestLabel "type_preservation" $
+          TestList
+            [ tStep "let x : num = 1 in x + 2",
+              tStep "let id : num -> num = fun (x : num) -> x in id 5",
+              tStep "(fun (x : num) -> x + 1) 5",
+              tStep "let x : num = 1 + 2 in x * 3"
+            ],
+        TestLabel "show" $
+          TestList
+            [ tShow "fun (x : num) -> x" "(λ x : num -> x)",
+              tShow "let x : num = 1 in x" "(let x : num = 1 in x)",
+              tShow "fun (f : num -> bool) -> f 0" "(λ f : (num → bool) -> (f 0))"
+            ],
+        TestLabel "let_poly_with_annotation" $
+          TestList
+            [ tType "let id : num -> num = fun x -> x in id" (TFn TNum TNum),
+              tType "let f : (num * bool) -> num = fun p -> p.L in f" (TFn (TProduct TNum TBool) TNum)
+            ],
+        TestLabel "parenthesized_type" $ TestCase $ do
+          case parse "fun (x : (num -> bool) * num) -> x" of
+            Left err -> assertFailure err
+            Right _ -> return (),
+        TestLabel "sum_annotation" $ TestCase $ do
+          case parse "fun (x : num + bool) -> x" of
+            Left err -> assertFailure err
+            Right _ -> return (),
+        TestLabel "type_var_annotation" $ TestCase $ do
+          case parse "fun (x : a) -> x" of
+            Left err -> assertFailure err
+            Right _ -> return (),
+        TestLabel "type_var_debruijn" $ TestCase $ do
+          case parse "fun (x : a) -> x" of
+            Left err -> assertFailure err
+            Right e -> do
+              let db = toDebruijn e
+              assertEqual "debruijn preserves type var"
+                (ELam (Variable "_") (Just (TVar (Variable "a"))) (EDeBruijn 0))
+                db,
+        TestLabel "annotated_type_preservation" $
+          TestList
+            [ tStep "let x : num = 1 in x + 2",
+              tStep "let x : num = 1 + 2 in x * 3",
+              tStep "(fun (x : num) -> x + 1) 5",
+              tStep "let f : num -> num = fun (x : num) -> x in f 5",
+              tStep "let x : num * bool = (1, true) in x.L",
+              tStep "let x : num * bool = (1, true) in x.R"
+            ],
+        TestLabel "show_complex" $
+          TestList
+            [ tShow "fun (x : num * bool) -> x" "(λ x : num * bool -> x)",
+              tShow "fun (x : num + bool) -> x" "(λ x : num + bool -> x)",
+              tShow "fun (x : (num -> bool) * num) -> x" "(λ x : (num → bool) * num -> x)"
+            ],
+        TestLabel "annotation_parse_errors" $
+          TestList
+            [ tParseError "fun (: num) -> x",
+              tParseError "fun (x :) -> x",
+              tParseError "fun (x : -> num) -> x"
+            ],
+        TestLabel "forall_annotations" $
+          TestList
+            [ tType "let f : ∀ a . a -> a = fun x -> x in f 1" TNum,
+              tType "let f : ∀ a . a -> a = fun x -> x in f true" TBool,
+              tType "let f : ∀ a . a -> a = fun x -> x in (f 1, f true)" (TProduct TNum TBool),
+              tType "let f : ∀ a . a -> bool = fun x -> true in f 1" TBool,
+              tTypeError "let f : ∀ a . a -> a = 1 in f 1",
+              tTypeError "let f : ∀ a . a -> bool = fun x -> x in f 1",
+              t "let f : ∀ a . a -> a = fun x -> x in f 1" (ENum 1) TNum,
+              tStep "let f : ∀ a . a -> a = fun x -> x in f 1",
+              tStep "let f : ∀ a . a -> a = fun x -> x in (f 1, f true)",
+              tStep "let f : ∀ a . a -> bool = fun x -> true in f 1",
+              tShow "let f : ∀ a . a -> a = fun x -> x in f 1" "(let f : ∀ a . (a → a) = (λ x -> x) in (f 1))",
+              tParseError "let f : ∀ = fun x -> x in f 1",
+              tParseError "let f : ∀ a = fun x -> x in f 1"
+            ]
       ]

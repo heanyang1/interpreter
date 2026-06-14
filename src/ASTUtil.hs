@@ -30,13 +30,13 @@ instance Symbol Expr where
         ETrue -> e
         EFalse -> e
         EUnit -> e
-        EDeBruijn _ -> error "Should not have de Bruijn in input"
+        EDeBruijn n -> EDeBruijn n
         EVar v -> case Map.lookup v depth of
             Nothing -> EVar v
             Just n -> EDeBruijn n
-        ELam x e' ->
+        ELam x mt e' ->
             let newDepth = Map.insert x 0 (fmap (+1) depth)
-            in ELam (Variable "_") (toDebruijnMap newDepth e')
+            in ELam (Variable "_") mt (toDebruijnMap newDepth e')
         EApp lam arg -> EApp (toDebruijnMap depth lam) (toDebruijnMap depth arg)
         EAddop op left right -> EAddop op (toDebruijnMap depth left) (toDebruijnMap depth right)
         EMulop op left right -> EMulop op (toDebruijnMap depth left) (toDebruijnMap depth right)
@@ -58,9 +58,9 @@ instance Symbol Expr where
         EFix x e' ->
             let newDepth = Map.insert x 0 (fmap (+1) depth)
             in EFix (Variable "_") (toDebruijnMap newDepth e')
-        ELet x e_x e_in ->
+        ELet x mt e_x e_in ->
             let depthX = Map.insert x 0 (fmap (+1) depth)
-            in ELet (Variable "_") (toDebruijnMap depth e_x) (toDebruijnMap depthX e_in)
+            in ELet (Variable "_") mt (toDebruijnMap depth e_x) (toDebruijnMap depthX e_in)
 
 getAllVars :: Type -> [Variable]
 getAllVars t = case t of

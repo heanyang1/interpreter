@@ -64,7 +64,7 @@ data Expr
     | EOr Expr Expr
     | EVar Variable
     | EDeBruijn Int
-    | ELam Variable Expr
+    | ELam Variable (Maybe Type) Expr
     | EApp Expr Expr
     | EUnit
     | EPair Expr Expr
@@ -78,7 +78,7 @@ data Expr
         , eright :: Expr
         }
     | EFix Variable Expr
-    | ELet Variable Expr Expr
+    | ELet Variable (Maybe Type) Expr Expr
     deriving (Eq)
 
 instance Show Expr where
@@ -103,6 +103,8 @@ instance Show Expr where
     show (ECase e xleft eleft xright eright) =
         "(case " ++ show e ++ " of L(" ++ show xleft ++ ") -> " ++ show eleft ++ " | R(" ++ show xright ++ ") -> " ++ show eright ++ ")"
     show (EApp lam arg) = "(" ++ show lam ++ " " ++ show arg ++ ")"
-    show (ELam x e) = "(λ " ++ show x ++ " -> " ++ show e ++ ")"
-    show (ELet x e_x e_in) = "(let " ++ show x ++ " = " ++ show e_x ++ " in " ++ show e_in ++ ")"
+    show (ELam x Nothing e) = "(λ " ++ show x ++ " -> " ++ show e ++ ")"
+    show (ELam x (Just t) e) = "(λ " ++ show x ++ " : " ++ show t ++ " -> " ++ show e ++ ")"
+    show (ELet x Nothing e_x e_in) = "(let " ++ show x ++ " = " ++ show e_x ++ " in " ++ show e_in ++ ")"
+    show (ELet x (Just t) e_x e_in) = "(let " ++ show x ++ " : " ++ show t ++ " = " ++ show e_x ++ " in " ++ show e_in ++ ")"
     show (EFix x e) = "(fix " ++ show x ++ " -> " ++ show e ++ ")"

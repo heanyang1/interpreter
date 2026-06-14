@@ -37,6 +37,44 @@ var = try $ do
 dir :: P Direction
 dir = (kw "L" >> return L) <|> (kw "R" >> return R)
 
+parseType :: P Type
+parseType = parseForall
+  where
+    parseForall :: P Type
+    parseForall =
+        try (do
+            char '\x2200'
+            spaces
+            v <- var
+            op "."
+            t <- parseForall
+            return (TForall v t))
+        <|> parseArrow
+    parseArrow :: P Type
+    parseArrow = do
+        t1 <- parseSum
+        rest <- (try (op "->" >> fmap Just parseArrow)) <|> return Nothing
+        case rest of
+            Nothing -> return t1
+            Just t2 -> return (TFn t1 t2)
+    parseSum :: P Type
+    parseSum = do
+        t1 <- parseProduct
+        rest <- many (try (op "+" *> parseProduct))
+        return $ foldl1 (\acc r -> TSum acc r) (t1 : rest)
+    parseProduct :: P Type
+    parseProduct = do
+        t1 <- parseAtom
+        rest <- many (try (op "*" *> parseAtom))
+        return $ foldl1 (\acc r -> TProduct acc r) (t1 : rest)
+    parseAtom :: P Type
+    parseAtom =
+            (kw "num" >> return TNum)
+        <|> (kw "bool" >> return TBool)
+        <|> (try (op "(" >> op ")" >> return TUnit))
+        <|> (try (op "(" >> parseType >>= \t -> op ")" >> return t))
+        <|> (TVar <$> var)
+
 parse :: String -> Either String Expr
 parse input = case P.parse (spaces *> expr <* eof) "" input of
     Left err -> Left (show err)
@@ -54,27 +92,29 @@ letrecExpr =
         e1 <- letrecExpr
         kw "in"
         e2 <- letrecExpr
-        return (EApp (ELam x e2) (EFix x e1)))
+        return (EApp (ELam x Nothing e2) (EFix x e1)))
     <|> letExpr
 
 letExpr :: P Expr
 letExpr =
     try (do
         kw "let"
-        x <- var
+        (x, mt) <- try (do { v <- var; op ":"; t <- parseType; return (v, Just t) })
+               <|> (fmap (\v -> (v, Nothing)) var)
         op "="
         e1 <- letExpr
         kw "in"
-        ELet x e1 <$> letExpr)
+        ELet x mt e1 <$> letExpr)
     <|> funExpr
 
 funExpr :: P Expr
 funExpr =
     try (do
         kw "fun"
-        x <- var
+        (x, mt) <- try (do { op "("; v <- var; op ":"; t <- parseType; op ")"; return (v, Just t) })
+               <|> (fmap (\v -> (v, Nothing)) var)
         op "->"
-        ELam x <$> funExpr)
+        ELam x mt <$> funExpr)
     <|> fixExpr
 
 fixExpr :: P Expr

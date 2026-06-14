@@ -11,7 +11,7 @@ tryStep e = case e of
   ETrue -> Val
   EFalse -> Val
   EUnit -> Val
-  ELam _ _ -> Val
+  ELam _ _ _ -> Val
   EPair _ _ -> Val
   EInject _ _ -> Val
   EDeBruijn _ -> Val
@@ -53,7 +53,7 @@ tryStep e = case e of
     (lam, (`EApp` arg)) |-> \() ->
       (arg, EApp lam) |-> \() ->
         case lam of
-          ELam _ body -> Step (deBruijnSubst 0 arg body)
+          ELam _ _ body -> Step (deBruijnSubst 0 arg body)
   EProject e d ->
     (e, (`EProject` d)) |-> \() ->
       case e of
@@ -65,8 +65,8 @@ tryStep e = case e of
         EInject e' L -> Step (deBruijnSubst 0 e' eleft)
         EInject e' R -> Step (deBruijnSubst 0 e' eright)
   EFix _ body -> Step (deBruijnSubst 0 (EFix (Variable "_") body) body)
-  ELet _ e_x e_in ->
-    (e_x, \e_x' -> ELet (Variable "_") e_x' e_in) |-> \() ->
+  ELet _ _ e_x e_in ->
+    (e_x, \e_x' -> ELet (Variable "_") Nothing e_x' e_in) |-> \() ->
       Step (deBruijnSubst 0 e_x e_in)
 
 (|->) :: (Expr, Expr -> Expr) -> (() -> Outcome) -> Outcome
@@ -78,7 +78,7 @@ deBruijnSubst :: Int -> Expr -> Expr -> Expr
 deBruijnSubst k s (EDeBruijn i)
   | i == k = s
   | otherwise = EDeBruijn i
-deBruijnSubst k s (ELam x body) = ELam x (deBruijnSubst (k + 1) s body)
+deBruijnSubst k s (ELam x mt body) = ELam x mt (deBruijnSubst (k + 1) s body)
 deBruijnSubst k s (EApp f a) = EApp (deBruijnSubst k s f) (deBruijnSubst k s a)
 deBruijnSubst k s (EAddop op l r) = EAddop op (deBruijnSubst k s l) (deBruijnSubst k s r)
 deBruijnSubst k s (EMulop op l r) = EMulop op (deBruijnSubst k s l) (deBruijnSubst k s r)
@@ -92,7 +92,7 @@ deBruijnSubst k s (EInject e d) = EInject (deBruijnSubst k s e) d
 deBruijnSubst k s (ECase e _ el _ er) =
   ECase (deBruijnSubst k s e) (Variable "_") (deBruijnSubst (k + 1) s el) (Variable "_") (deBruijnSubst (k + 1) s er)
 deBruijnSubst k s (EFix _ body) = EFix (Variable "_") (deBruijnSubst (k + 1) s body)
-deBruijnSubst k s (ELet _ x e_in) = ELet (Variable "_") (deBruijnSubst k s x) (deBruijnSubst (k + 1) s e_in)
+deBruijnSubst k s (ELet _ mt x e_in) = ELet (Variable "_") mt (deBruijnSubst k s x) (deBruijnSubst (k + 1) s e_in)
 deBruijnSubst _ _ e = e
 
 eval :: Expr -> Expr

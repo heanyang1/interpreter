@@ -111,12 +111,13 @@ getConstraints expr ctx = case expr of
                 let ty = ctx !! (ctxLen - 1 - depth)
                 instTy <- instantiate ty
                 return (instTy, [])
-    ELam _ e -> do
-        tau <- freshTypeVar
-        let ctx' = ctx ++ [tau]
+    ELam _ mt e -> do
+        tauX <- case mt of
+            Just t -> return t
+            Nothing -> freshTypeVar
+        let ctx' = ctx ++ [tauX]
         (tauRet, cRet) <- getConstraints e ctx'
-        let fnType = TFn tau tauRet
-        return (fnType, cRet)
+        return (TFn tauX tauRet, cRet)
     EApp lam arg -> do
         (tauLam, cLam) <- getConstraints lam ctx
         (tauArg, cArg) <- getConstraints arg ctx
@@ -163,12 +164,24 @@ getConstraints expr ctx = case expr of
         (tauE, cE) <- getConstraints e ctx'
         let constraints = cE ++ [Constraint tauX tauE (show (EFix (Variable "_") e)) (show e)]
         return (tauX, constraints)
-    ELet x e_x e_in -> do
+    ELet x mt e_x e_in -> do
         (tauX, cX) <- getConstraints e_x ctx
-        tauXGen <- lift $ generalize tauX cX
+        (tauXGen, cX') <- case mt of
+            Just (TForall v body) -> do
+                newVar <- freshTypeVar
+                let body' = substituteMapVar (Map.singleton v newVar) body
+                let cX' = cX ++ [Constraint tauX body' (show e_x) (show body')]
+                tauXGen <- lift $ generalize tauX cX'
+                return (tauXGen, cX')
+            Just t -> lift $ do
+                tauXGen <- generalize tauX (cX ++ [Constraint tauX t (show e_x) (show t)])
+                return (tauXGen, cX ++ [Constraint tauX t (show e_x) (show t)])
+            Nothing -> lift $ do
+                tauXGen <- generalize tauX cX
+                return (tauXGen, cX)
         let ctx' = ctx ++ [tauXGen]
         (tauIn, cIn) <- getConstraints e_in ctx'
-        return (tauIn, cIn ++ cX)
+        return (tauIn, cIn ++ cX')
 
 generalize :: Type -> [Constraint] -> Either String Type
 generalize tau constraints = do
