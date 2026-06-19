@@ -9,15 +9,24 @@ import Data.List (nub)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe)
+import Debug.Trace (trace)
+import Flags (Mode (..))
 import UnionFind
 
 data Constraint = Constraint
   { typeL :: Type,
-    typeR :: Type,
-    exprL :: String,
-    exprR :: String
+    typeR :: Type
   }
-  deriving (Show, Eq)
+  deriving (Eq)
+
+instance Show Constraint where
+  show c = show (typeL c) ++ " = " ++ show (typeR c)
+
+formatConstraints :: [Constraint] -> String
+formatConstraints [] = "No constraints."
+formatConstraints cs =
+  "Constraints:\n"
+    ++ unlines ["  " ++ show c | c <- cs]
 
 type VarId = Int
 
@@ -44,12 +53,13 @@ instantiate t = case t of
     return (substituteMapVar (Map.singleton a newVar) subst)
   TMu a body -> TMu a <$> instantiate body
 
-typeCheck :: Expr -> Either String Type
-typeCheck expr = do
+typeCheck :: Mode -> Expr -> Either String Type
+typeCheck mode expr = do
   let result0 = runStateT (getConstraints expr []) 0
   case result0 of
     Left err -> Left err
     Right ((curType, constraints), _) -> do
+      () <- if mode == VeryVerbose then trace (formatConstraints constraints) (Right ()) else Right ()
       (uf, mp) <- unification constraints
       let result = getType curType uf mp
       unless (null (getFreeVars result)) $
@@ -67,8 +77,8 @@ getConstraints expr ctx = case expr of
     let constraints =
           cLeft
             ++ cRight
-            ++ [ Constraint tauLeft TNum (show left) "Num",
-                 Constraint tauRight TNum (show right) "Num"
+            ++ [ Constraint tauLeft TNum,
+                 Constraint tauRight TNum
                ]
     return (TNum, constraints)
   EMulop _ left right -> do
@@ -77,8 +87,8 @@ getConstraints expr ctx = case expr of
     let constraints =
           cLeft
             ++ cRight
-            ++ [ Constraint tauLeft TNum (show left) "Num",
-                 Constraint tauRight TNum (show right) "Num"
+            ++ [ Constraint tauLeft TNum,
+                 Constraint tauRight TNum
                ]
     return (TNum, constraints)
   ERelop _ left right -> do
@@ -87,8 +97,8 @@ getConstraints expr ctx = case expr of
     let constraints =
           cLeft
             ++ cRight
-            ++ [ Constraint tauLeft TNum (show left) "Num",
-                 Constraint tauRight TNum (show right) "Num"
+            ++ [ Constraint tauLeft TNum,
+                 Constraint tauRight TNum
                ]
     return (TBool, constraints)
   EIf cond then_ else_ -> do
@@ -99,8 +109,8 @@ getConstraints expr ctx = case expr of
           cCond
             ++ cThen
             ++ cElse
-            ++ [ Constraint tauCond TBool (show cond) "Bool",
-                 Constraint tauThen tauElse (show then_) (show else_)
+            ++ [ Constraint tauCond TBool,
+                 Constraint tauThen tauElse
                ]
     return (tauThen, constraints)
   EAnd left right -> do
@@ -109,8 +119,8 @@ getConstraints expr ctx = case expr of
     let constraints =
           cLeft
             ++ cRight
-            ++ [ Constraint tauLeft TBool (show left) "Bool",
-                 Constraint tauRight TBool (show right) "Bool"
+            ++ [ Constraint tauLeft TBool,
+                 Constraint tauRight TBool
                ]
     return (TBool, constraints)
   EOr left right -> do
@@ -119,8 +129,8 @@ getConstraints expr ctx = case expr of
     let constraints =
           cLeft
             ++ cRight
-            ++ [ Constraint tauLeft TBool (show left) "Bool",
-                 Constraint tauRight TBool (show right) "Bool"
+            ++ [ Constraint tauLeft TBool,
+                 Constraint tauRight TBool
                ]
     return (TBool, constraints)
   EVar (VName x) -> lift $ Left $ "Free variable: " ++ show x
@@ -144,7 +154,7 @@ getConstraints expr ctx = case expr of
     let constraints =
           cLam
             ++ cArg
-            ++ [Constraint tauLam (TFn tauArg tauRet) (show lam) (show tauArg ++ " → " ++ show tauRet)]
+            ++ [Constraint tauLam (TFn tauArg tauRet)]
     return (tauRet, constraints)
   EPair left right -> do
     (tauL, cL) <- getConstraints left ctx
@@ -156,16 +166,25 @@ getConstraints expr ctx = case expr of
     tauR <- freshTypeVar
     let constraints =
           cE
-            ++ [Constraint tauE (TProduct tauL tauR) (show e) (show tauL ++ " * " ++ show tauR)]
+            ++ [Constraint tauE (TProduct tauL tauR)]
     return (case d of L -> tauL; R -> tauR, constraints)
   EUnit -> return (TUnit, [])
-  EInject e d -> do
+  EInject e d mt -> do
     (tauE, cE) <- getConstraints e ctx
-    tauOther <- freshTypeVar
-    let tauFull = case d of
-          L -> TSum tauE tauOther
-          R -> TSum tauOther tauE
-    return (tauFull, cE)
+    case mt of
+      Just (TSum tauL tauR) -> do
+        let tauFull = case d of
+              L -> TSum tauE tauR
+              R -> TSum tauL tauE
+        let extra = Constraint tauE (case d of L -> tauL; R -> tauR)
+        return (tauFull, cE ++ [extra])
+      Just _ -> lift $ Left "Injection annotation must be a sum type"
+      Nothing -> do
+        tauOther <- freshTypeVar
+        let tauFull = case d of
+              L -> TSum tauE tauOther
+              R -> TSum tauOther tauE
+        return (tauFull, cE)
   ECase e xleft eleft xright eright -> do
     (tauSum, cSum) <- getConstraints e ctx
     tauL <- freshTypeVar
@@ -180,15 +199,15 @@ getConstraints expr ctx = case expr of
           cSum
             ++ cL
             ++ cR
-            ++ [ Constraint tauSum (TSum tauL tauR) (show e) (show tauL ++ " + " ++ show tauR),
-                 Constraint tauLAfter tauRAfter (show eleft) (show eright)
+            ++ [ Constraint tauSum (TSum tauL tauR),
+                 Constraint tauLAfter tauRAfter
                ]
     return (tauLAfter, constraints)
   EFix _ e -> do
     tauX <- freshTypeVar
     let ctx' = ctx ++ [tauX]
     (tauE, cE) <- getConstraints e ctx'
-    let constraints = cE ++ [Constraint tauX tauE (show (EFix (VName "_") e)) (show e)]
+    let constraints = cE ++ [Constraint tauX tauE]
     return (tauX, constraints)
   ELet x mt e_x e_in -> do
     (tauX, cX) <- getConstraints e_x ctx
@@ -196,12 +215,12 @@ getConstraints expr ctx = case expr of
       Just (TForall v body) -> do
         newVar <- freshTypeVar
         let body' = substituteMapVar (Map.singleton v newVar) body
-        let cX' = cX ++ [Constraint tauX body' (show e_x) (show body')]
+        let cX' = cX ++ [Constraint tauX body']
         tauXGen <- lift $ generalize tauX cX'
         return (tauXGen, cX')
       Just t -> lift $ do
-        tauXGen <- generalize tauX (cX ++ [Constraint tauX t (show e_x) (show t)])
-        return (tauXGen, cX ++ [Constraint tauX t (show e_x) (show t)])
+        tauXGen <- generalize tauX (cX ++ [Constraint tauX t])
+        return (tauXGen, cX ++ [Constraint tauX t])
       Nothing -> lift $ do
         tauXGen <- generalize tauX cX
         return (tauXGen, cX)
@@ -249,7 +268,7 @@ unification' uf mp (c : cs) = case (typeL c, typeR c) of
         let mp' = Map.insert root rv mp
         unification' uf' mp' cs
       (Just lv, Just rv) ->
-        let newC = Constraint lv rv (show lv) (show rv)
+        let newC = Constraint lv rv
          in unification' uf' mp (newC : cs)
   (TVar v, t) -> do
     let vRoot = case find uf v of Right x -> x; Left _ -> v
@@ -259,21 +278,28 @@ unification' uf mp (c : cs) = case (typeL c, typeR c) of
           let mp' = Map.insert vRoot t mp
           unification' uf mp' cs
         Just oldT -> do
-          let newC = Constraint oldT t (show oldT) (show t)
+          let newC = Constraint oldT t
           unification' uf mp (newC : cs)
       else Left $ "Unification failed: " ++ show (typeL c) ++ " and " ++ show (typeR c)
-  (t, TVar v) -> unification' uf mp (Constraint (typeR c) (typeL c) (exprR c) (exprL c) : cs)
+  (t, TVar v) -> unification' uf mp (Constraint (typeR c) (typeL c) : cs)
   (TFn a1 r1, TFn a2 r2) ->
-    let newCs = [Constraint a1 a2 (show a1) (show a2), Constraint r1 r2 (show r1) (show r2)]
+    let newCs = [Constraint a1 a2, Constraint r1 r2]
      in unification' uf mp (newCs ++ cs)
   (TProduct l1 r1, TProduct l2 r2) ->
-    let newCs = [Constraint l1 l2 (show l1) (show l2), Constraint r1 r2 (show r1) (show r2)]
+    let newCs = [Constraint l1 l2, Constraint r1 r2]
      in unification' uf mp (newCs ++ cs)
   (TSum l1 r1, TSum l2 r2) ->
-    let newCs = [Constraint l1 l2 (show l1) (show l2), Constraint r1 r2 (show r1) (show r2)]
+    let newCs = [Constraint l1 l2, Constraint r1 r2]
      in unification' uf mp (newCs ++ cs)
-  -- (TMu a body, TMu a' body') ->
-
+  (TMu _ body, TMu _ body') ->
+    if body == body'
+      then unification' uf mp cs
+      else
+        Left $ "Unification failed: " ++ show (typeL c) ++ " = " ++ show (typeR c)
+  (TMu _ body, t) ->
+    unification' uf mp (Constraint t (substituteVar (VDeBruijn 0) (typeL c) body) : cs)
+  (t, TMu _ body) ->
+    unification' uf mp (Constraint t (substituteVar (VDeBruijn 0) (typeR c) body) : cs)
   _ -> Left $ "Unification failed: " ++ show (typeL c) ++ " = " ++ show (typeR c)
 
 getType :: Type -> UnionFind Variable -> Map Variable Type -> Type

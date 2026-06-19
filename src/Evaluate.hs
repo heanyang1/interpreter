@@ -12,8 +12,13 @@ tryStep e = case e of
   EFalse -> Val
   EUnit -> Val
   ELam {} -> Val
-  EPair _ _ -> Val
-  EInject _ _ -> Val
+  EPair left right ->
+    (left, (`EPair` right)) |-> \() ->
+      (right, EPair left) |-> \() ->
+        Val
+  EInject e d mt ->
+    (e, \e' -> EInject e' d mt) |-> \() ->
+      Val
   EAddop op left right ->
     (left, \left' -> EAddop op left' right) |-> \() ->
       (right, EAddop op left) |-> \() ->
@@ -61,8 +66,8 @@ tryStep e = case e of
   ECase e _ eleft _ eright ->
     (e, \e' -> ECase e' (VName "_") eleft (VName "_") eright) |-> \() ->
       case e of
-        EInject e' L -> Step (deBruijnSubst 0 e' eleft)
-        EInject e' R -> Step (deBruijnSubst 0 e' eright)
+        EInject e' L _ -> Step (deBruijnSubst 0 e' eleft)
+        EInject e' R _ -> Step (deBruijnSubst 0 e' eright)
   EFix _ body -> Step (deBruijnSubst 0 (EFix (VName "_") body) body)
   ELet _ _ e_x e_in ->
     (e_x, \e_x' -> ELet (VName "_") Nothing e_x' e_in) |-> \() ->
@@ -87,7 +92,7 @@ deBruijnSubst k s (EAnd l r) = EAnd (deBruijnSubst k s l) (deBruijnSubst k s r)
 deBruijnSubst k s (EOr l r) = EOr (deBruijnSubst k s l) (deBruijnSubst k s r)
 deBruijnSubst k s (EPair l r) = EPair (deBruijnSubst k s l) (deBruijnSubst k s r)
 deBruijnSubst k s (EProject e d) = EProject (deBruijnSubst k s e) d
-deBruijnSubst k s (EInject e d) = EInject (deBruijnSubst k s e) d
+deBruijnSubst k s (EInject e d mt) = EInject (deBruijnSubst k s e) d mt
 deBruijnSubst k s (ECase e _ el _ er) =
   ECase (deBruijnSubst k s e) (VName "_") (deBruijnSubst (k + 1) s el) (VName "_") (deBruijnSubst (k + 1) s er)
 deBruijnSubst k s (EFix _ body) = EFix (VName "_") (deBruijnSubst (k + 1) s body)

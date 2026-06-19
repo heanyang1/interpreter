@@ -41,13 +41,13 @@ tStep s = TestCase $ do
     Left err -> assertFailure $ "Parse error: " ++ err
     Right e -> return e
   let db = toDebruijn e
-  ty <- case typeCheck db of
+  ty <- case typeCheck Eval db of
     Left err -> assertFailure $ "Type error on original: " ++ err
     Right ty -> return ty
   case tryStep db of
     Val -> assertFailure $ "Expression is already a value: " ++ s
     Step e' -> do
-      ty' <- case typeCheck e' of
+      ty' <- case typeCheck Eval e' of
         Left err -> assertFailure $ "Type error after step: " ++ err
         Right ty' -> return ty'
       assertBool
@@ -62,7 +62,7 @@ evalExpr s = case parse s of
 checkType :: String -> Either String Type
 checkType s = case parse s of
   Left err -> Left err
-  Right e -> typeCheck (toDebruijn e)
+  Right e -> typeCheck Eval (toDebruijn e)
 
 t :: String -> Expr -> Type -> Test
 t s val ty = TestCase $ do

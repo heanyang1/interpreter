@@ -121,7 +121,7 @@ instance ToGraph Expr where
     EProject e d -> do
       (cur, next1) <- newNode (case d of L -> "P_left"; R -> "P_right") parent counter "red"
       toGraph e cur next1
-    EInject e d -> do
+    EInject e d _ -> do
       (cur, next1) <- newNode (case d of L -> "I_left"; R -> "I_right") parent counter "red"
       toGraph e cur next1
     ECase e xleft eleft xright eright -> do

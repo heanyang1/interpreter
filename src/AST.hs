@@ -73,7 +73,7 @@ data Expr
   | EUnit
   | EPair Expr Expr
   | EProject Expr Direction
-  | EInject Expr Direction
+  | EInject Expr Direction (Maybe Type)
   | ECase
       { e :: Expr,
         xleft :: Variable,
@@ -102,7 +102,8 @@ instance Show Expr where
     (EPair left _, L) -> show left
     (EPair _ right, R) -> show right
     _ -> show e ++ "." ++ show d
-  show (EInject e d) = show e
+  show (EInject e d Nothing) = show e
+  show (EInject e d (Just t)) = "(inj " ++ show e ++ " = " ++ show d ++ " as " ++ show t ++ ")"
   show (ECase e xleft eleft xright eright) =
     "(case " ++ show e ++ " of L(" ++ show xleft ++ ") -> " ++ show eleft ++ " | R(" ++ show xright ++ ") -> " ++ show eright ++ ")"
   show (EApp lam arg) = "(" ++ show lam ++ " " ++ show arg ++ ")"
@@ -111,3 +112,28 @@ instance Show Expr where
   show (ELet x Nothing e_x e_in) = "(let " ++ show x ++ " = " ++ show e_x ++ " in " ++ show e_in ++ ")"
   show (ELet x (Just t) e_x e_in) = "(let " ++ show x ++ " : " ++ show t ++ " = " ++ show e_x ++ " in " ++ show e_in ++ ")"
   show (EFix x e) = "(fix " ++ show x ++ " -> " ++ show e ++ ")"
+
+showSimplified :: Expr -> String
+showSimplified (EVar v) = show v
+showSimplified (ENum n) = show n
+showSimplified ETrue = "true"
+showSimplified EFalse = "false"
+showSimplified EUnit = "()"
+showSimplified (EAddop op left right) = "(" ++ showSimplified left ++ " " ++ show op ++ " " ++ showSimplified right ++ ")"
+showSimplified (EMulop op left right) = "(" ++ showSimplified left ++ " " ++ show op ++ " " ++ showSimplified right ++ ")"
+showSimplified (EIf cond then_ else_) = "(if " ++ showSimplified cond ++ " then " ++ showSimplified then_ ++ " else " ++ showSimplified else_ ++ ")"
+showSimplified (ERelop op left right) = "(" ++ showSimplified left ++ " " ++ show op ++ " " ++ showSimplified right ++ ")"
+showSimplified (EAnd left right) = "(" ++ showSimplified left ++ " && " ++ showSimplified right ++ ")"
+showSimplified (EOr left right) = "(" ++ showSimplified left ++ " || " ++ showSimplified right ++ ")"
+showSimplified (EPair left right) = "(" ++ showSimplified left ++ " , " ++ showSimplified right ++ ")"
+showSimplified (EProject e d) = case (e, d) of
+  (EPair left _, L) -> showSimplified left
+  (EPair _ right, R) -> showSimplified right
+  _ -> showSimplified e ++ "." ++ show d
+showSimplified (EInject e _ _) = showSimplified e
+showSimplified (ECase e xleft eleft xright eright) =
+  "(case " ++ showSimplified e ++ " of L(" ++ show xleft ++ ") -> " ++ showSimplified eleft ++ " | R(" ++ show xright ++ ") -> " ++ showSimplified eright ++ ")"
+showSimplified (EApp lam arg) = "(" ++ showSimplified lam ++ " " ++ showSimplified arg ++ ")"
+showSimplified (ELam x _ e) = "(λ " ++ show x ++ " -> " ++ showSimplified e ++ ")"
+showSimplified (ELet x _ e_x e_in) = "(let " ++ show x ++ " = " ++ showSimplified e_x ++ " in " ++ showSimplified e_in ++ ")"
+showSimplified (EFix x e) = "(fix " ++ show x ++ " -> " ++ showSimplified e ++ ")"

@@ -17,6 +17,7 @@ instance Symbol Type where
     TVar (VName v) -> case Map.lookup v depth of
       Nothing -> TVar (VName v)
       Just n -> TVar (VDeBruijn n)
+    TVar n@(VDeBruijn _) -> TVar n
     TProduct left right -> TProduct (toDebruijnMap depth left) (toDebruijnMap depth right)
     TSum left right -> TSum (toDebruijnMap depth left) (toDebruijnMap depth right)
     TFn arg ret -> TFn (toDebruijnMap depth arg) (toDebruijnMap depth ret)
@@ -39,7 +40,7 @@ instance Symbol Expr where
     EVar n -> EVar n
     ELam (VName x) mt e' ->
       let newDepth = Map.insert x 0 (fmap (+ 1) depth)
-       in ELam (VName "_") mt (toDebruijnMap newDepth e')
+       in ELam (VName "_") (fmap toDebruijn mt) (toDebruijnMap newDepth e')
     EApp lam arg -> EApp (toDebruijnMap depth lam) (toDebruijnMap depth arg)
     EAddop op left right -> EAddop op (toDebruijnMap depth left) (toDebruijnMap depth right)
     EMulop op left right -> EMulop op (toDebruijnMap depth left) (toDebruijnMap depth right)
@@ -49,7 +50,7 @@ instance Symbol Expr where
     EOr left right -> EOr (toDebruijnMap depth left) (toDebruijnMap depth right)
     EPair left right -> EPair (toDebruijnMap depth left) (toDebruijnMap depth right)
     EProject e d -> EProject (toDebruijnMap depth e) d
-    EInject e d -> EInject (toDebruijnMap depth e) d
+    EInject e d mt -> EInject (toDebruijnMap depth e) d (fmap toDebruijn mt)
     ECase e' (VName xleft) eleft (VName xright) eright ->
       let depthLeft = Map.insert xleft 0 (fmap (+ 1) depth)
           depthRight = Map.insert xright 0 (fmap (+ 1) depth)
@@ -64,7 +65,7 @@ instance Symbol Expr where
        in EFix (VName "_") (toDebruijnMap newDepth e')
     ELet (VName x) mt e_x e_in ->
       let depthX = Map.insert x 0 (fmap (+ 1) depth)
-       in ELet (VName "_") mt (toDebruijnMap depth e_x) (toDebruijnMap depthX e_in)
+       in ELet (VName "_") (fmap toDebruijn mt) (toDebruijnMap depth e_x) (toDebruijnMap depthX e_in)
 
 getAllVars :: Type -> [Variable]
 getAllVars t = case t of

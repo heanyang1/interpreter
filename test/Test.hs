@@ -155,6 +155,14 @@ testSum =
               t "let x = inj 1=R in case x {L(n)->(n.L)+1|R(n)->3*n}" (ENum 3) TNum,
               t "let x = (100,inj 1=R) in case x.R {L(n)->(n.L)+1|R(n)->3*n}" (ENum 3) TNum,
               t "let x = (inj 1 = R, inj (fun n -> n+1) = L).R in case x {L(f) -> (f 1) | R(n)->3*n}" (ENum 2) TNum
+            ],
+        TestLabel "annotated" $
+          TestList
+            [ t "case (inj 1 = L as num + bool) {L(l)->l+1|R(r)->0}" (ENum 2) TNum,
+              t "case (inj true = R as num + bool) {L(l)->0|R(r)->1}" (ENum 1) TNum,
+              tEval "inj 1 = L as num + bool" (EInject (ENum 1) L (Just (TSum TNum TBool))),
+              tType "inj 1 = L as num + bool" (TSum TNum TBool),
+              tType "inj true = R as num + bool" (TSum TNum TBool)
             ]
       ]
 
@@ -253,6 +261,15 @@ testMoreTypeCheck =
             Right (TForall _ (TSum l _)) -> assertEqual "inject left" TNum l
             Right (TSum l _) -> assertEqual "inject left" TNum l
             Right ty -> assertFailure $ "Unexpected: " ++ show ty,
+        TestLabel "inject_annotated" $ TestCase $ do
+          case checkType "inj 1 = L as num + bool" of
+            Left err -> assertFailure err
+            Right (TSum l r) -> assertEqual "annotated_left" TNum l >> assertEqual "annotated_right" TBool r
+            Right ty -> assertFailure $ "Unexpected: " ++ show ty,
+        TestLabel "inject_annotated_type_error" $ TestCase $ do
+          case checkType "inj true = L as num + bool" of
+            Left _ -> return ()
+            Right ty -> assertFailure $ "Expected type error, got " ++ show ty,
         TestLabel "inject_right" $ TestCase $ do
           case checkType "inj true = R" of
             Left err -> assertFailure err
@@ -268,7 +285,27 @@ testMoreTypeCheck =
           case checkType "let id = fun x -> x in let f = fun y -> y in (id true, f 1)" of
             Left err -> assertFailure err
             Right (TProduct l r) -> assertEqual "poly" (TProduct TBool TNum) (TProduct l r)
-            Right ty -> assertFailure $ "Expected product, got " ++ show ty
+            Right ty -> assertFailure $ "Expected product, got " ++ show ty,
+        TestLabel "rec_type_parse" $ TestCase $ do
+          case parseTypeStr "rec a . () + (num * a)" of
+            Left err -> assertFailure err
+            Right (TMu (VName _) body) -> assertEqual "rec body is sum" (TSum TUnit (TProduct TNum (TVar (VName "a")))) body
+            Right ty -> assertFailure $ "Expected TMu, got " ++ show ty,
+        TestLabel "rec_type_show" $ TestCase $ do
+          assertEqual "show TMu" "(μ a . () + num * a)" (show (TMu (VName "a") (TSum TUnit (TProduct TNum (TVar (VName "a")))))),
+        TestLabel "rec_type_debruijn" $ TestCase $ do
+          let t = TMu (VName "a") (TSum TUnit (TProduct TNum (TVar (VName "a"))))
+          let db = toDebruijn t
+          assertEqual "debruijn TMu preserves type vars" (TMu (VName "_") (TSum TUnit (TProduct TNum (TVar (VDeBruijn 0))))) db,
+        TestLabel "rec_type_annotated" $
+          TestList
+            [ tEval "let f = fun (x : rec a . () + (num * a)) -> case x {L(e) -> inj e = L | R(c) -> c.R} in f (inj (2, inj (1, inj () = L) = R) = R)" (EInject (EPair (ENum 1) (EInject EUnit L Nothing)) R Nothing)
+            ],
+        TestLabel "inject_annotated_right" $
+          TestList
+            [ tType "inj true = R as num + bool" (TSum TNum TBool),
+              tTypeError "inj true = L as num + bool"
+            ]
       ]
 
 -- Type errors
@@ -297,6 +334,7 @@ testTypeErrors =
               tTypeError "case () {L(l)->l+1|R(r)->3*r}",
               tTypeError "1*(1,2)",
               tTypeError "(inj 1=L)/1",
+              tTypeError "inj 1 = L as num",
               tTypeError "1<(2,3)"
             ],
         TestLabel "fixpoints" $ tTypeError "letrec f = 5 in f 1"
@@ -394,6 +432,11 @@ testTypePreservation =
             [ tStep "case (inj 1 = L) {L(x) -> x | R(y) -> 3 * y}",
               tStep "case (inj 1 = R) {L(y) -> 3 | R(x) -> x * 2}"
             ],
+        TestLabel "case_annotated" $
+          TestList
+            [ tStep "case (inj 1 = L as num + bool) {L(x) -> x + 1 | R(y) -> 0}",
+              tStep "case (inj true = R as num + bool) {L(x) -> 0 | R(y) -> 1}"
+            ],
         TestLabel "subst_and_or" $
           TestList
             [ tStep "let x = true in x && (2 == 2)",
@@ -429,6 +472,14 @@ testFlags =
               tFormatType "true" Simplified "bool",
               tFormatType "true" DeBruijn "bool",
               tFormatType "true" Graphviz ""
+            ],
+        TestLabel "verbose" $
+          TestList
+            [ TestCase $ do
+                case typeCheck VeryVerbose (toDebruijn (ENum 1)) of
+                  Right TNum -> return ()
+                  Right ty -> assertFailure $ "Expected TNum, got " ++ show ty
+                  Left err -> assertFailure $ "Type error: " ++ err
             ]
       ]
 
@@ -462,7 +513,14 @@ testDotGen =
         tFormatAstContent "(1,2).L" "P_left",
         tFormatAstContent "inj 1 = L" "I_left",
         tFormatAstContent "let x = 1 in x" "let",
-        tFormatAstContent "fix f -> f" "fix"
+        tFormatAstContent "fix f -> f" "fix",
+        tFormatAstContent "inj 1 = R" "I_right",
+        tFormatAstContent "(1,2).R" "P_right",
+        tFormatAstContent "case (inj 1 = L) {L(x)->x|R(y)->y}" "case",
+        tFormatAstContent "fun x -> x" "<0>",
+        tFormatAstContent "1-2" "-",
+        tFormatAstContent "2/3" "/",
+        tFormatAstContent "1>2" ">"
       ]
 
 tFormatAstContent :: String -> String -> Test
@@ -597,7 +655,7 @@ testTryStep =
               _ -> assertFailure "EPair should be Val",
         TestLabel "EInject" $
           TestCase $
-            case tryStep (EInject (ENum 1) L) of
+            case tryStep (EInject (ENum 1) L Nothing) of
               Val -> return ()
               _ -> assertFailure "EInject should be Val",
         TestLabel "deBruijnSubst_outside_ref" $ TestCase $ do
@@ -630,6 +688,7 @@ testShowInstances =
         tShow "fun x -> x" "(λ x -> x)",
         tShow "if true then 1 else 2" "(if true then 1 else 2)",
         tShow "inj 1=L" "1",
+        tShow "inj 1=L as num + bool" "(inj 1 = L as num + bool)",
         tShow "let x = 1 in x" "(let x = 1 in x)",
         tShow "fix f -> f" "(fix f -> f)",
         tShow "case inj 1=L {L(x)->x|R(y)->y}" "(case 1 of L(x) -> x | R(y) -> y)",
@@ -649,7 +708,7 @@ testShowInstances =
           let e = EApp (ELam (VName "x") Nothing (EVar (VName "x"))) (ENum 1)
           assertEqual "show EApp" "((λ x -> x) 1)" (show e),
         TestLabel "inject_show" $ TestCase $ do
-          assertEqual "inject" "1" (show (EInject (ENum 1) L)),
+          assertEqual "inject" "1" (show (EInject (ENum 1) L Nothing)),
         TestLabel "eval_type_show" $ TestCase $ do
           assertEqual "TNum" "num" (show (TNum :: Type))
           assertEqual "TBool" "bool" (show (TBool :: Type))
@@ -687,7 +746,7 @@ testTypeCheckUtil =
     TestList
       [ TestLabel "debruijn_out_of_bounds" $
           TestCase $
-            case typeCheck (EVar (VDeBruijn 5)) of
+            case typeCheck Eval (EVar (VDeBruijn 5)) of
               Left _ -> return ()
               Right ty -> assertFailure $ "Expected error, got " ++ show ty,
         TestLabel "generalize_quantifies_free_vars" $
@@ -705,57 +764,57 @@ testTypeCheckUtil =
               Right (TForall _ _) -> return ()
               _ -> assertFailure "Expected forall type",
         TestLabel "unify_tunit" $ TestCase $ do
-          let constraint = Constraint TUnit TUnit "" ""
+          let constraint = Constraint TUnit TUnit
           case unification [constraint] of
             Left err -> assertFailure err
             Right _ -> return (),
         TestLabel "unify_var_var_just_nothing" $ TestCase $ do
-          let c1 = Constraint (TVar (VName "type_1")) TNum "" ""
-          let c2 = Constraint (TVar (VName "type_1")) (TVar (VName "type_0")) "" ""
+          let c1 = Constraint (TVar (VName "type_1")) TNum
+          let c2 = Constraint (TVar (VName "type_1")) (TVar (VName "type_0"))
           case unification [c1, c2] of
             Left err -> assertFailure err
             Right _ -> return (),
         TestLabel "unify_var_var_nothing_just" $ TestCase $ do
-          let c1 = Constraint (TVar (VName "type_0")) TNum "" ""
-          let c2 = Constraint (TVar (VName "type_1")) (TVar (VName "type_0")) "" ""
+          let c1 = Constraint (TVar (VName "type_0")) TNum
+          let c2 = Constraint (TVar (VName "type_1")) (TVar (VName "type_0"))
           case unification [c1, c2] of
             Left err -> assertFailure err
             Right _ -> return (),
         TestLabel "unify_var_var_both_just" $ TestCase $ do
-          let c1 = Constraint (TVar (VName "type_0")) TNum "" ""
-          let c2 = Constraint (TVar (VName "type_1")) TBool "" ""
-          let c3 = Constraint (TVar (VName "type_0")) (TVar (VName "type_1")) "" ""
+          let c1 = Constraint (TVar (VName "type_0")) TNum
+          let c2 = Constraint (TVar (VName "type_1")) TBool
+          let c3 = Constraint (TVar (VName "type_0")) (TVar (VName "type_1"))
           case unification [c1, c2, c3] of
             Left _ -> return ()
             Right _ -> assertFailure "Expected unification failure",
         TestLabel "unify_var_type_already_mapped" $ TestCase $ do
-          let c1 = Constraint (TVar (VName "type_0")) TNum "" ""
-          let c2 = Constraint (TVar (VName "type_0")) TBool "" ""
+          let c1 = Constraint (TVar (VName "type_0")) TNum
+          let c2 = Constraint (TVar (VName "type_0")) TBool
           case unification [c1, c2] of
             Left _ -> return ()
             Right _ -> assertFailure "Expected unification failure",
         TestLabel "unify_tfn" $ TestCase $ do
-          let c = Constraint (TFn TNum TNum) (TFn TNum TNum) "" ""
+          let c = Constraint (TFn TNum TNum) (TFn TNum TNum)
           case unification [c] of
             Left err -> assertFailure err
             Right _ -> return (),
         TestLabel "unify_tproduct" $ TestCase $ do
-          let c = Constraint (TProduct TNum TBool) (TProduct TNum TBool) "" ""
+          let c = Constraint (TProduct TNum TBool) (TProduct TNum TBool)
           case unification [c] of
             Left err -> assertFailure err
             Right _ -> return (),
         TestLabel "unify_tsum" $ TestCase $ do
-          let c = Constraint (TSum TNum TBool) (TSum TNum TBool) "" ""
+          let c = Constraint (TSum TNum TBool) (TSum TNum TBool)
           case unification [c] of
             Left err -> assertFailure err
             Right _ -> return (),
         TestLabel "unify_var_occurs_check" $ TestCase $ do
-          let c = Constraint (TVar (VName "type_0")) (TFn (TVar (VName "type_0")) TNum) "" ""
+          let c = Constraint (TVar (VName "type_0")) (TFn (TVar (VName "type_0")) TNum)
           case unification [c] of
             Left _ -> return ()
             Right _ -> assertFailure "Expected occurs check failure",
         TestLabel "typecheck_free_vars_remain" $ TestCase $ do
-          case typeCheck (EApp (EVar (VDeBruijn 1)) (ENum 1)) of
+          case typeCheck Eval (EApp (EVar (VDeBruijn 1)) (ENum 1)) of
             Left _ -> return ()
             Right _ -> assertFailure "Expected type error for free variables"
       ]
@@ -904,6 +963,9 @@ testAnnotations =
             [ tType "let f : forall a . a -> a = fun x -> x in f 1" TNum,
               tType "let f : forall a . a -> a = fun x -> x in f true" TBool,
               tType "let f : forall a . a -> a = fun x -> x in (f 1, f true)" (TProduct TNum TBool),
+              tType "let x : num = 1 in x" TNum,
+              tType "let x : () = () in x" TUnit,
+              tType "let x : bool = true in x" TBool,
               tType "let f : forall a . a -> bool = fun x -> true in f 1" TBool,
               tTypeError "let f : forall a . a -> a = 1 in f 1",
               tTypeError "let f : forall a . a -> bool = fun x -> x in f 1",

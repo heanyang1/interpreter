@@ -1,0 +1,6 @@
+let f = fun (x: (rec a . unit + (num * a))) ->
+    case x {
+        L(e) -> inj e = L
+        | R(c) -> c.R
+    }
+in f (inj (2, inj (1, inj () = L) = R) = R)

@@ -216,7 +216,9 @@ injectExpr =
         kw "inj"
         e <- projectExpr
         op "="
-        EInject e <$> dir
+        d <- dir
+        mt <- option Nothing (try (kw "as" *> fmap Just parseType))
+        return (EInject e d mt)
     )
     <|> projectExpr
 

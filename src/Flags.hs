@@ -22,7 +22,7 @@ data OutputMode
 formatAst :: Expr -> OutputMode -> Maybe String -> String
 formatAst ast outputMode name = case outputMode of
   Full -> show ast
-  Simplified -> show (toDebruijn ast)
+  Simplified -> showSimplified ast
   DeBruijn -> show (toDebruijn ast)
   Graphviz -> toDot ast name
 

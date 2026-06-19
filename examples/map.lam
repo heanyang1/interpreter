@@ -1,0 +1,8 @@
+letrec map =
+    fun f ->
+        fun x ->
+            case x {
+                L(e) -> inj e = L
+                | R(c) -> inj (f(c.L), (map f c.R)) = R as unit + num * (rec a . unit + (num * a))
+            }
+in map (fun x -> x + 1) (inj (2, inj (1, inj () = L) = R) = R)
