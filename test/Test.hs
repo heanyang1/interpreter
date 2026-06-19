@@ -1,10 +1,10 @@
 import AST
-import ASTUtil (Symbol(..))
+import ASTUtil (Symbol (..))
+import Data.List (isInfixOf, isPrefixOf)
 import qualified Data.Map.Strict as Map
-import Data.List (isPrefixOf, isInfixOf)
 import Evaluate
 import Flags
-import Parser
+import Parser (parse, parseTypeStr)
 import Test.HUnit
 import TestRunner
 import TypeCheck
@@ -220,8 +220,8 @@ testMoreTypeCheck =
             Left err -> assertFailure err
             Right (TForall a (TFn arg ret)) -> do
               let showA = show a
-              assertBool "arg is TVar a" $ case arg of TVar (Variable v) -> v == showA; _ -> False
-              assertBool "ret is TVar a" $ case ret of TVar (Variable v) -> v == showA; _ -> False
+              assertBool "arg is TVar a" $ case arg of TVar (VName v) -> v == showA; _ -> False
+              assertBool "ret is TVar a" $ case ret of TVar (VName v) -> v == showA; _ -> False
             Right ty -> assertFailure $ "Expected forall fn, got " ++ show ty,
         TestLabel "fn_const" $ TestCase $ do
           case checkType "fun x -> true && x" of
@@ -467,113 +467,115 @@ testDotGen =
 
 tFormatAstContent :: String -> String -> Test
 tFormatAstContent s label = TestCase $
-    case parse s of
-        Left err -> assertFailure $ "Parse error: " ++ err
-        Right e -> do
-            let result = formatAst e Graphviz Nothing
-            assertBool ("Graphviz output for " ++ s ++ " should contain " ++ label)
-                       (label `isInfixOf` result)
-            assertBool "Graphviz output should start with digraph"
-                       ("digraph" `isPrefixOf` result)
+  case parse s of
+    Left err -> assertFailure $ "Parse error: " ++ err
+    Right e -> do
+      let result = formatAst e Graphviz Nothing
+      assertBool
+        ("Graphviz output for " ++ s ++ " should contain " ++ label)
+        (label `isInfixOf` result)
+      assertBool
+        "Graphviz output should start with digraph"
+        ("digraph" `isPrefixOf` result)
 
 testUnionFind :: Test
 testUnionFind =
   TestLabel "UnionFind" $
     TestList
       [ TestLabel "connected" $ TestCase $ do
-          let vs = map Variable ["a", "b", "c"]
+          let vs = map VName ["a", "b", "c"]
           let uf = mkUnionFind vs
-          result <- case connected uf (Variable "a") (Variable "b") of
+          result <- case connected uf (VName "a") (VName "b") of
             Left err -> assertFailure err
             Right r -> return r
           assertBool "a and b not connected initially" (not result),
         TestLabel "union_connected" $ TestCase $ do
-          let vs = map Variable ["a", "b", "c"]
+          let vs = map VName ["a", "b", "c"]
           let uf = mkUnionFind vs
-          (uf', _) <- case union uf (Variable "a") (Variable "b") of
+          (uf', _) <- case union uf (VName "a") (VName "b") of
             Left err -> assertFailure err
             Right r -> return r
-          result <- case connected uf' (Variable "a") (Variable "b") of
+          result <- case connected uf' (VName "a") (VName "b") of
             Left err -> assertFailure err
             Right r -> return r
           assertBool "a and b connected after union" result,
         TestLabel "find_not_found" $ TestCase $ do
-          let vs = map Variable ["a"]
+          let vs = [VName "a"]
           let uf = mkUnionFind vs
-          case find uf (Variable "z") of
+          case find uf (VName "z") of
             Left _ -> return ()
             Right _ -> assertFailure "Expected error",
         TestLabel "union_same" $ TestCase $ do
-          let vs = map Variable ["a", "b"]
+          let vs = map VName ["a", "b"]
           let uf = mkUnionFind vs
-          (_, r) <- case union uf (Variable "a") (Variable "a") of
+          (_, r) <- case union uf (VName "a") (VName "a") of
             Left err -> assertFailure err
             Right r -> return r
-          assertEqual "union same" (Variable "a") r,
+          assertEqual "union same" (VName "a") r,
         TestLabel "union_eq_rank" $ TestCase $ do
-          let vs = map Variable ["a", "b"]
+          let vs = map VName ["a", "b"]
           let uf = mkUnionFind vs
-          (uf', _) <- case union uf (Variable "a") (Variable "b") of
+          (uf', _) <- case union uf (VName "a") (VName "b") of
             Left err -> assertFailure err
             Right r -> return r
-          rootA <- case find uf' (Variable "a") of Left _ -> assertFailure "find"; Right r -> return r
-          rootB <- case find uf' (Variable "b") of Left _ -> assertFailure "find"; Right r -> return r
+          rootA <- case find uf' (VName "a") of Left _ -> assertFailure "find"; Right r -> return r
+          rootB <- case find uf' (VName "b") of Left _ -> assertFailure "find"; Right r -> return r
           assertEqual "both in same set" rootA rootB,
         TestLabel "find_path_compression" $ TestCase $ do
-          let vs = map Variable ["a", "b", "c"]
+          let vs = map VName ["a", "b", "c"]
           let uf = mkUnionFind vs
-          (uf1, _) <- case union uf (Variable "a") (Variable "b") of
+          (uf1, _) <- case union uf (VName "a") (VName "b") of
             Left err -> assertFailure err
             Right r -> return r
-          (uf2, _) <- case union uf1 (Variable "b") (Variable "c") of
+          (uf2, _) <- case union uf1 (VName "b") (VName "c") of
             Left err -> assertFailure err
             Right r -> return r
-          _ <- case find uf2 (Variable "a") of Left err -> assertFailure err; Right r -> return r
-          _ <- case find uf2 (Variable "c") of Left err -> assertFailure err; Right r -> return r
-          conn <- case connected uf2 (Variable "a") (Variable "c") of
+          _ <- case find uf2 (VName "a") of Left err -> assertFailure err; Right r -> return r
+          _ <- case find uf2 (VName "c") of Left err -> assertFailure err; Right r -> return r
+          conn <- case connected uf2 (VName "a") (VName "c") of
             Left err -> assertFailure err
             Right r -> return r
           assertBool "a and c connected" conn,
         TestLabel "find_rank_lt" $ TestCase $ do
-          let vs = map Variable ["a", "b"]
+          let vs = map VName ["a", "b"]
           let uf0 = mkUnionFind vs
-          let uf1 = uf0 {rank = Map.insert (Variable "b") 1 (rank uf0)}
-          (_, r) <- case union uf1 (Variable "a") (Variable "b") of
+          let uf1 = uf0 {rank = Map.insert (VName "b") 1 (rank uf0)}
+          (_, r) <- case union uf1 (VName "a") (VName "b") of
             Left err -> assertFailure err
             Right r -> return r
-          assertEqual "rank LT attaches to higher" (Variable "b") r,
+          assertEqual "rank LT attaches to higher" (VName "b") r,
         TestLabel "find_path_compression_depth" $ TestCase $ do
-          let vs = map Variable ["a", "b", "c"]
+          let vs = map VName ["a", "b", "c"]
           let uf = mkUnionFind vs
-          (uf1, _) <- case union uf (Variable "a") (Variable "b") of
+          (uf1, _) <- case union uf (VName "a") (VName "b") of
             Left err -> assertFailure err
             Right r -> return r
-          (uf2, _) <- case union uf1 (Variable "a") (Variable "c") of
+          (uf2, _) <- case union uf1 (VName "a") (VName "c") of
             Left err -> assertFailure err
             Right r -> return r
-          _ <- case find uf2 (Variable "c") of
+          _ <- case find uf2 (VName "c") of
             Left err -> assertFailure err
             Right r -> return r
           return (),
         TestLabel "find_with_compression" $ TestCase $ do
-          let vs = map Variable ["a", "b", "c", "d", "e"]
+          let vs = map VName ["a", "b", "c", "d", "e"]
           let uf = mkUnionFind vs
-          (uf1, _) <- case union uf (Variable "d") (Variable "e") of
+          (uf1, _) <- case union uf (VName "d") (VName "e") of
             Left err -> assertFailure err
             Right r -> return r
-          (uf2, _) <- case union uf1 (Variable "a") (Variable "b") of
+          (uf2, _) <- case union uf1 (VName "a") (VName "b") of
             Left err -> assertFailure err
             Right r -> return r
-          (uf3, _) <- case union uf2 (Variable "a") (Variable "c") of
+          (uf3, _) <- case union uf2 (VName "a") (VName "c") of
             Left err -> assertFailure err
             Right r -> return r
           -- now rank a = 2, rank d = 1
           -- union a (rank 2) with d (rank 1) -> GT: d attaches to a
-          (uf4, _) <- case union uf3 (Variable "a") (Variable "d") of
+          (uf4, _) <- case union uf3 (VName "a") (VName "d") of
             Left err -> assertFailure err
             Right r -> return r
           -- now find e -> should trigger path compression: e -> d -> a
-          _ <- case find uf4 (Variable "e") of
+          _ <- case find uf4 (VName "e") of
             Left err -> assertFailure err
             Right r -> return r
           return ()
@@ -583,14 +585,9 @@ testTryStep :: Test
 testTryStep =
   TestLabel "TryStep" $
     TestList
-      [ TestLabel "EDeBruijn" $
+      [ TestLabel "ELam" $
           TestCase $
-            case tryStep (EDeBruijn 0) of
-              Val -> return ()
-              _ -> assertFailure "EDeBruijn should be Val",
-        TestLabel "ELam" $
-          TestCase $
-            case tryStep (ELam (Variable "x") Nothing (ENum 1)) of
+            case tryStep (ELam (VName "x") Nothing (ENum 1)) of
               Val -> return ()
               _ -> assertFailure "ELam should be Val",
         TestLabel "EPair" $
@@ -604,9 +601,9 @@ testTryStep =
               Val -> return ()
               _ -> assertFailure "EInject should be Val",
         TestLabel "deBruijnSubst_outside_ref" $ TestCase $ do
-          let e = EApp (ELam (Variable "_") Nothing (EApp (ELam (Variable "_") Nothing (EDeBruijn 1)) (ENum 1))) (ENum 2)
+          let e = EApp (ELam (VName "_") Nothing (EApp (ELam (VName "_") Nothing (EVar (VDeBruijn 1))) (ENum 1))) (ENum 2)
           case tryStep e of
-            Step e' -> assertEqual "outer app step" (EApp (ELam (Variable "_") Nothing (ENum 2)) (ENum 1)) e'
+            Step e' -> assertEqual "outer app step" (EApp (ELam (VName "_") Nothing (ENum 2)) (ENum 1)) e'
             _ -> assertFailure "Expected Step",
         TestLabel "parseError" $ tParseError "let in",
         TestLabel "keyword_as_var" $ tParseError "fun let -> x"
@@ -642,14 +639,14 @@ testShowInstances =
         tShowType "1+2" "num",
         tShowType "1<2" "bool",
         TestLabel "edebruijn" $ TestCase $ do
-          assertEqual "show EDeBruijn" "<5>" (show (EDeBruijn 5)),
+          assertEqual "show EDeBruijn" "<5>" (show (EVar (VDeBruijn 5))),
         TestLabel "project_pair" $ TestCase $ do
           assertEqual "project L on pair" "1" (show (EProject (EPair (ENum 1) (ENum 2)) L))
           assertEqual "project R on pair" "2" (show (EProject (EPair (ENum 1) (ENum 2)) R)),
         TestLabel "project_non_pair" $ TestCase $ do
-          assertEqual "project on var" "x.L" (show (EProject (EVar (Variable "x")) L)),
+          assertEqual "project on var" "x.L" (show (EProject (EVar (VName "x")) L)),
         TestLabel "eapp_show" $ TestCase $ do
-          let e = EApp (ELam (Variable "x") Nothing (EVar (Variable "x"))) (ENum 1)
+          let e = EApp (ELam (VName "x") Nothing (EVar (VName "x"))) (ENum 1)
           assertEqual "show EApp" "((λ x -> x) 1)" (show e),
         TestLabel "inject_show" $ TestCase $ do
           assertEqual "inject" "1" (show (EInject (ENum 1) L)),
@@ -657,11 +654,11 @@ testShowInstances =
           assertEqual "TNum" "num" (show (TNum :: Type))
           assertEqual "TBool" "bool" (show (TBool :: Type))
           assertEqual "TUnit" "()" (show (TUnit :: Type))
-          assertEqual "TVar" "x" (show (TVar (Variable "x") :: Type))
+          assertEqual "TVar" "x" (show (TVar (VName "x") :: Type))
           assertEqual "TFn" "(num → bool)" (show (TFn TNum TBool))
           assertEqual "TProduct" "num * bool" (show (TProduct TNum TBool))
           assertEqual "TSum" "num + bool" (show (TSum TNum TBool))
-          assertEqual "TForall" "∀ x . num" (show (TForall (Variable "x") TNum)),
+          assertEqual "TForall" "∀ x . num" (show (TForall (VName "x") TNum)),
         TestLabel "op_show" $ TestCase $ do
           assertEqual "Add" "+" (show Add)
           assertEqual "Sub" "-" (show Sub)
@@ -675,7 +672,7 @@ testShowInstances =
         TestLabel "eunit" $ TestCase $ do
           assertEqual "EUnit" "()" (show EUnit),
         TestLabel "free_var_in_ast" $ TestCase $ do
-          assertEqual "free var not bound" "(λ x -> (x y))" (show (ELam (Variable "x") Nothing (EApp (EVar (Variable "x")) (EVar (Variable "y"))))),
+          assertEqual "free var not bound" "(λ x -> (x y))" (show (ELam (VName "x") Nothing (EApp (EVar (VName "x")) (EVar (VName "y"))))),
         TestLabel "debruijn_output_type" $ TestCase $ do
           case checkType "let id = fun x -> x in id" of
             Left err -> assertFailure err
@@ -690,17 +687,17 @@ testTypeCheckUtil =
     TestList
       [ TestLabel "debruijn_out_of_bounds" $
           TestCase $
-            case typeCheck (EDeBruijn 5) of
+            case typeCheck (EVar (VDeBruijn 5)) of
               Left _ -> return ()
               Right ty -> assertFailure $ "Expected error, got " ++ show ty,
         TestLabel "generalize_quantifies_free_vars" $
           TestCase $
-            case generalize (TVar (Variable "type_0")) [] of
+            case generalize (TVar (VName "type_0")) [] of
               Left err -> assertFailure $ "Expected generalize to succeed, got: " ++ err
               Right ty ->
                 assertEqual
                   "generalize should quantify free vars"
-                  (TForall (Variable "type_0") (TVar (Variable "type_0")))
+                  (TForall (VName "type_0") (TVar (VName "type_0")))
                   ty,
         TestLabel "check_free_vars_remain" $
           TestCase $
@@ -713,27 +710,27 @@ testTypeCheckUtil =
             Left err -> assertFailure err
             Right _ -> return (),
         TestLabel "unify_var_var_just_nothing" $ TestCase $ do
-          let c1 = Constraint (TVar (Variable "type_1")) TNum "" ""
-          let c2 = Constraint (TVar (Variable "type_1")) (TVar (Variable "type_0")) "" ""
+          let c1 = Constraint (TVar (VName "type_1")) TNum "" ""
+          let c2 = Constraint (TVar (VName "type_1")) (TVar (VName "type_0")) "" ""
           case unification [c1, c2] of
             Left err -> assertFailure err
             Right _ -> return (),
         TestLabel "unify_var_var_nothing_just" $ TestCase $ do
-          let c1 = Constraint (TVar (Variable "type_0")) TNum "" ""
-          let c2 = Constraint (TVar (Variable "type_1")) (TVar (Variable "type_0")) "" ""
+          let c1 = Constraint (TVar (VName "type_0")) TNum "" ""
+          let c2 = Constraint (TVar (VName "type_1")) (TVar (VName "type_0")) "" ""
           case unification [c1, c2] of
             Left err -> assertFailure err
             Right _ -> return (),
         TestLabel "unify_var_var_both_just" $ TestCase $ do
-          let c1 = Constraint (TVar (Variable "type_0")) TNum "" ""
-          let c2 = Constraint (TVar (Variable "type_1")) TBool "" ""
-          let c3 = Constraint (TVar (Variable "type_0")) (TVar (Variable "type_1")) "" ""
+          let c1 = Constraint (TVar (VName "type_0")) TNum "" ""
+          let c2 = Constraint (TVar (VName "type_1")) TBool "" ""
+          let c3 = Constraint (TVar (VName "type_0")) (TVar (VName "type_1")) "" ""
           case unification [c1, c2, c3] of
             Left _ -> return ()
             Right _ -> assertFailure "Expected unification failure",
         TestLabel "unify_var_type_already_mapped" $ TestCase $ do
-          let c1 = Constraint (TVar (Variable "type_0")) TNum "" ""
-          let c2 = Constraint (TVar (Variable "type_0")) TBool "" ""
+          let c1 = Constraint (TVar (VName "type_0")) TNum "" ""
+          let c2 = Constraint (TVar (VName "type_0")) TBool "" ""
           case unification [c1, c2] of
             Left _ -> return ()
             Right _ -> assertFailure "Expected unification failure",
@@ -753,12 +750,12 @@ testTypeCheckUtil =
             Left err -> assertFailure err
             Right _ -> return (),
         TestLabel "unify_var_occurs_check" $ TestCase $ do
-          let c = Constraint (TVar (Variable "type_0")) (TFn (TVar (Variable "type_0")) TNum) "" ""
+          let c = Constraint (TVar (VName "type_0")) (TFn (TVar (VName "type_0")) TNum) "" ""
           case unification [c] of
             Left _ -> return ()
             Right _ -> assertFailure "Expected occurs check failure",
         TestLabel "typecheck_free_vars_remain" $ TestCase $ do
-          case typeCheck (EApp (EDeBruijn 1) (ENum 1)) of
+          case typeCheck (EApp (EVar (VDeBruijn 1)) (ENum 1)) of
             Left _ -> return ()
             Right _ -> assertFailure "Expected type error for free variables"
       ]
@@ -788,19 +785,19 @@ testAnnotations =
         TestLabel "lam_parse" $ TestCase $ do
           case parse "fun (x : num) -> x + 1" of
             Left err -> assertFailure err
-            Right e -> assertEqual "parse lam annotation" (ELam (Variable "x") (Just TNum) (EAddop Add (EVar (Variable "x")) (ENum 1))) e,
+            Right e -> assertEqual "parse lam annotation" (ELam (VName "x") (Just TNum) (EAddop Add (EVar (VName "x")) (ENum 1))) e,
         TestLabel "lam_parse_unannotated" $ TestCase $ do
           case parse "fun x -> x" of
             Left err -> assertFailure err
-            Right e -> assertEqual "parse lam no annotation" (ELam (Variable "x") Nothing (EVar (Variable "x"))) e,
+            Right e -> assertEqual "parse lam no annotation" (ELam (VName "x") Nothing (EVar (VName "x"))) e,
         TestLabel "let_parse" $ TestCase $ do
           case parse "let x : num = 1 in x + 2" of
             Left err -> assertFailure err
-            Right e -> assertEqual "parse let annotation" (ELet (Variable "x") (Just TNum) (ENum 1) (EAddop Add (EVar (Variable "x")) (ENum 2))) e,
+            Right e -> assertEqual "parse let annotation" (ELet (VName "x") (Just TNum) (ENum 1) (EAddop Add (EVar (VName "x")) (ENum 2))) e,
         TestLabel "let_parse_unannotated" $ TestCase $ do
           case parse "let x = 1 in x" of
             Left err -> assertFailure err
-            Right e -> assertEqual "parse let no annotation" (ELet (Variable "x") Nothing (ENum 1) (EVar (Variable "x"))) e,
+            Right e -> assertEqual "parse let no annotation" (ELet (VName "x") Nothing (ENum 1) (EVar (VName "x"))) e,
         TestLabel "lam_typecheck" $
           TestList
             [ tType "fun (x : num) -> x + 1" (TFn TNum TNum),
@@ -877,8 +874,9 @@ testAnnotations =
             Left err -> assertFailure err
             Right e -> do
               let db = toDebruijn e
-              assertEqual "debruijn preserves type var"
-                (ELam (Variable "_") (Just (TVar (Variable "a"))) (EDeBruijn 0))
+              assertEqual
+                "debruijn preserves type var"
+                (ELam (VName "_") (Just (TVar (VName "a"))) (EVar (VDeBruijn 0)))
                 db,
         TestLabel "annotated_type_preservation" $
           TestList
@@ -903,17 +901,17 @@ testAnnotations =
             ],
         TestLabel "forall_annotations" $
           TestList
-            [ tType "let f : ∀ a . a -> a = fun x -> x in f 1" TNum,
-              tType "let f : ∀ a . a -> a = fun x -> x in f true" TBool,
-              tType "let f : ∀ a . a -> a = fun x -> x in (f 1, f true)" (TProduct TNum TBool),
-              tType "let f : ∀ a . a -> bool = fun x -> true in f 1" TBool,
-              tTypeError "let f : ∀ a . a -> a = 1 in f 1",
-              tTypeError "let f : ∀ a . a -> bool = fun x -> x in f 1",
-              t "let f : ∀ a . a -> a = fun x -> x in f 1" (ENum 1) TNum,
-              tStep "let f : ∀ a . a -> a = fun x -> x in f 1",
-              tStep "let f : ∀ a . a -> a = fun x -> x in (f 1, f true)",
-              tStep "let f : ∀ a . a -> bool = fun x -> true in f 1",
-              tShow "let f : ∀ a . a -> a = fun x -> x in f 1" "(let f : ∀ a . (a → a) = (λ x -> x) in (f 1))",
+            [ tType "let f : forall a . a -> a = fun x -> x in f 1" TNum,
+              tType "let f : forall a . a -> a = fun x -> x in f true" TBool,
+              tType "let f : forall a . a -> a = fun x -> x in (f 1, f true)" (TProduct TNum TBool),
+              tType "let f : forall a . a -> bool = fun x -> true in f 1" TBool,
+              tTypeError "let f : forall a . a -> a = 1 in f 1",
+              tTypeError "let f : forall a . a -> bool = fun x -> x in f 1",
+              t "let f : forall a . a -> a = fun x -> x in f 1" (ENum 1) TNum,
+              tStep "let f : forall a . a -> a = fun x -> x in f 1",
+              tStep "let f : forall a . a -> a = fun x -> x in (f 1, f true)",
+              tStep "let f : forall a . a -> bool = fun x -> true in f 1",
+              tShow "let f : forall a . a -> a = fun x -> x in f 1" "(let f : ∀ a . (a → a) = (λ x -> x) in (f 1))",
               tParseError "let f : ∀ = fun x -> x in f 1",
               tParseError "let f : ∀ a = fun x -> x in f 1"
             ]
