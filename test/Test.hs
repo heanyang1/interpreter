@@ -547,52 +547,43 @@ testUnionFind =
   in TestLabel "UnionFind" $
     TestList
       [ TestLabel "connected" $ TestCase $ do
-          let vs = [a, b, c]
-          let uf = mkUnionFind vs
+          let uf = mkUnionFind
           assertBool "a and b not connected initially" (find uf a /= find uf b),
         TestLabel "union_connected" $ TestCase $ do
-          let vs = [a, b, c]
-          let uf = mkUnionFind vs
+          let uf = mkUnionFind
           let uf' = unionBy (const 0) uf a b
           assertBool "a and b connected after union" (find uf' a == find uf' b),
         TestLabel "find_not_found" $ TestCase $ do
-          let vs = [a]
-          let uf = mkUnionFind vs
+          let uf = mkUnionFind
           assertEqual "not found returns itself" z (find uf z),
         TestLabel "union_same" $ TestCase $ do
-          let vs = [a, b]
-          let uf = mkUnionFind vs
+          let uf = mkUnionFind
           let uf' = unionBy (const 0) uf a a
           assertEqual "union same" a (find uf' a),
         TestLabel "union_eq_rank" $ TestCase $ do
-          let vs = [a, b]
-          let uf = mkUnionFind vs
+          let uf = mkUnionFind
           let uf' = unionBy (const 0) uf a b
           assertEqual "both in same set" (find uf' a) (find uf' b),
         TestLabel "find_path_compression" $ TestCase $ do
-          let vs = [a, b, c]
-          let uf = mkUnionFind vs
+          let uf = mkUnionFind
           let uf1 = unionBy (const 0) uf a b
           let uf2 = unionBy (const 0) uf1 b c
           let _ = find uf2 a
           let _ = find uf2 c
           assertBool "a and c connected" (find uf2 a == find uf2 c),
         TestLabel "find_rank_lt" $ TestCase $ do
-          let vs = [a, b]
-          let uf0 = mkUnionFind vs
+          let uf0 = mkUnionFind
           let uf1 = uf0 {rank = Map.insert b 1 (rank uf0)}
           let uf' = unionBy (const 0) uf1 a b
           assertEqual "rank LT attaches to higher" b (find uf' a),
         TestLabel "find_path_compression_depth" $ TestCase $ do
-          let vs = [a, b, c]
-          let uf = mkUnionFind vs
+          let uf = mkUnionFind
           let uf1 = unionBy (const 0) uf a b
           let uf2 = unionBy (const 0) uf1 a c
           let _ = find uf2 c
           return (),
         TestLabel "find_with_compression" $ TestCase $ do
-          let vs = [a, b, c, d, e]
-          let uf = mkUnionFind vs
+          let uf = mkUnionFind
           let uf1 = unionBy (const 0) uf d e
           let uf2 = unionBy (const 0) uf1 a b
           let uf3 = unionBy (const 0) uf2 a c

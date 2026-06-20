@@ -239,8 +239,7 @@ generalize tau constraints = do
 unification :: [Constraint] -> Either String UnionFind
 unification constraints = do
   let allVars = nub $ concatMap (\c -> getAllVars (typeL c) ++ getAllVars (typeR c)) constraints
-  let uf = mkUnionFind (map TVar allVars)
-  unification' uf constraints
+  unification' mkUnionFind constraints
 
 typeLevel :: Type -> Int
 typeLevel (TVar _) = 0
