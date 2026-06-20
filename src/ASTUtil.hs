@@ -93,6 +93,3 @@ getScopedVars t = case t of
 
 getFreeVars :: Type -> [Variable]
 getFreeVars t = filter (`notElem` getScopedVars t) (getAllVars t)
-
-addOneQuantifier :: Type -> Variable -> Type
-addOneQuantifier t a = TForall a t

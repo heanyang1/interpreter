@@ -60,8 +60,8 @@ typeCheck mode expr = do
     Left err -> Left err
     Right ((curType, constraints), _) -> do
       () <- if mode == VeryVerbose then trace (formatConstraints constraints) (Right ()) else Right ()
-      (uf, mp) <- unification constraints
-      let result = getType curType uf mp
+      uf <- unification constraints
+      let result = getType curType uf
       unless (null (getFreeVars result)) $
         Left "Free variables remain in type"
       return result
@@ -230,102 +230,105 @@ getConstraints expr ctx = case expr of
 
 generalize :: Type -> [Constraint] -> Either String Type
 generalize tau constraints = do
-  (uf, mp) <- unification constraints
-  let tauX = getType tau uf mp
+  uf <- unification constraints
+  let tauX = getType tau uf
   if not (null (getFreeVars tauX))
     then Left "Cannot generalize: free variables remain"
     else return tauX
 
-unification :: [Constraint] -> Either String (UnionFind Variable, Map Variable Type)
+unification :: [Constraint] -> Either String UnionFind
 unification constraints = do
   let allVars = nub $ concatMap (\c -> getAllVars (typeL c) ++ getAllVars (typeR c)) constraints
-  let uf = mkUnionFind allVars
-  let mp = Map.empty
-  unification' uf mp constraints
+  let uf = mkUnionFind (map TVar allVars)
+  unification' uf constraints
+
+typeLevel :: Type -> Int
+typeLevel (TVar _) = 0
+typeLevel TNum = 2
+typeLevel TBool = 2
+typeLevel TUnit = 2
+typeLevel _ = 1
+
+unificationFailed :: Constraint -> Either String a
+unificationFailed c = Left $ "Unification failed: " ++ show (typeL c) ++ " = " ++ show (typeR c)
 
 unification' ::
-  UnionFind Variable ->
-  Map Variable Type ->
+  UnionFind ->
   [Constraint] ->
-  Either String (UnionFind Variable, Map Variable Type)
-unification' uf mp [] = return (uf, mp)
-unification' uf mp (c : cs) = case (typeL c, typeR c) of
-  (TNum, TNum) -> unification' uf mp cs
-  (TBool, TBool) -> unification' uf mp cs
-  (TUnit, TUnit) -> unification' uf mp cs
-  (TVar l, TVar r) -> do
-    let lRootBefore = case find uf l of Right x -> x; Left _ -> l
-    let rRootBefore = case find uf r of Right x -> x; Left _ -> r
-    let lVal = Map.lookup lRootBefore mp
-    let rVal = Map.lookup rRootBefore mp
-    (uf', root) <- union uf l r
-    case (lVal, rVal) of
-      (Nothing, Nothing) -> unification' uf' mp cs
-      (Just lv, Nothing) -> do
-        let mp' = Map.insert root lv mp
-        unification' uf' mp' cs
-      (Nothing, Just rv) -> do
-        let mp' = Map.insert root rv mp
-        unification' uf' mp' cs
-      (Just lv, Just rv) ->
-        let newC = Constraint lv rv
-         in unification' uf' mp (newC : cs)
-  (TVar v, t) -> do
-    let vRoot = case find uf v of Right x -> x; Left _ -> v
+  Either String UnionFind
+unification' uf [] = return uf
+unification' uf (c : cs) = case (typeL c, typeR c) of
+  (TNum, TNum) -> unification' uf cs
+  (TBool, TBool) -> unification' uf cs
+  (TUnit, TUnit) -> unification' uf cs
+  (TVar l, TVar r) ->
+    let rootL = find uf (TVar l)
+        rootR = find uf (TVar r)
+     in if rootL == rootR
+          then unification' uf cs
+          else case (rootL, rootR) of
+            (TVar _, TVar _) ->
+              let uf' = unionBy typeLevel uf (TVar l) (TVar r)
+               in unification' uf' cs
+            (TVar _, _) ->
+              let uf' = uf {parent = Map.insert rootL rootR (parent uf)}
+               in unification' uf' cs
+            (_, TVar _) ->
+              let uf' = uf {parent = Map.insert rootR rootL (parent uf)}
+               in unification' uf' cs
+            (TNum, TNum) -> unification' uf cs
+            (TBool, TBool) -> unification' uf cs
+            (TUnit, TUnit) -> unification' uf cs
+            _ -> unification' uf (Constraint rootL rootR : cs)
+  (TVar v, t) ->
     if not (containsVar v t)
-      then case Map.lookup vRoot mp of
-        Nothing -> do
-          let mp' = Map.insert vRoot t mp
-          unification' uf mp' cs
-        Just oldT -> do
-          let newC = Constraint oldT t
-          unification' uf mp (newC : cs)
-      else Left $ "Unification failed: " ++ show (typeL c) ++ " and " ++ show (typeR c)
-  (t, TVar v) -> unification' uf mp (Constraint (typeR c) (typeL c) : cs)
+      then
+        let root = find uf (TVar v)
+         in case root of
+              TVar _ ->
+                let uf' = unionBy typeLevel uf root t
+                 in unification' uf' cs
+              _ -> case (root, t) of
+                (TNum, TNum) -> unification' uf cs
+                (TBool, TBool) -> unification' uf cs
+                (TUnit, TUnit) -> unification' uf cs
+                (TNum, _) -> unificationFailed c
+                (TBool, _) -> unificationFailed c
+                (TUnit, _) -> unificationFailed c
+                (_, TNum) -> unificationFailed c
+                (_, TBool) -> unificationFailed c
+                (_, TUnit) -> unificationFailed c
+                _ -> unification' uf (Constraint root t : cs)
+      else unificationFailed c
+  (t, TVar v) -> unification' uf (Constraint (typeR c) (typeL c) : cs)
   (TFn a1 r1, TFn a2 r2) ->
     let newCs = [Constraint a1 a2, Constraint r1 r2]
-     in unification' uf mp (newCs ++ cs)
+     in unification' uf (newCs ++ cs)
   (TProduct l1 r1, TProduct l2 r2) ->
     let newCs = [Constraint l1 l2, Constraint r1 r2]
-     in unification' uf mp (newCs ++ cs)
+     in unification' uf (newCs ++ cs)
   (TSum l1 r1, TSum l2 r2) ->
     let newCs = [Constraint l1 l2, Constraint r1 r2]
-     in unification' uf mp (newCs ++ cs)
+     in unification' uf (newCs ++ cs)
   (TMu _ body, TMu _ body') ->
     if body == body'
-      then unification' uf mp cs
-      else
-        Left $ "Unification failed: " ++ show (typeL c) ++ " = " ++ show (typeR c)
+      then unification' uf cs
+      else unificationFailed c
   (TMu _ body, t) ->
-    unification' uf mp (Constraint t (substituteVar (VDeBruijn 0) (typeL c) body) : cs)
+    unification' uf (Constraint t (substituteVar (VDeBruijn 0) (typeL c) body) : cs)
   (t, TMu _ body) ->
-    unification' uf mp (Constraint t (substituteVar (VDeBruijn 0) (typeR c) body) : cs)
-  _ -> Left $ "Unification failed: " ++ show (typeL c) ++ " = " ++ show (typeR c)
+    unification' uf (Constraint t (substituteVar (VDeBruijn 0) (typeR c) body) : cs)
+  _ -> unificationFailed c
 
-getType :: Type -> UnionFind Variable -> Map Variable Type -> Type
-getType tau uf mp =
-  let fvs = getFreeVars tau
-   in if null fvs
-        then substituteVars tau
-        else
-          let x = head fvs
-           in case find uf x of
-                Left _ -> getType (addOneQuantifier tau x) uf mp
-                Right r ->
-                  if r /= x
-                    then getType (substituteVar x (TVar r) tau) uf mp
-                    else case Map.lookup r mp of
-                      Just t -> getType (substituteVar x t tau) uf mp
-                      Nothing -> getType (addOneQuantifier tau x) uf mp
-  where
-    substituteVars t = case t of
-      TVar v -> maybe t substituteVars (Map.lookup v mp)
-      TFn a r -> TFn (substituteVars a) (substituteVars r)
-      TProduct l r -> TProduct (substituteVars l) (substituteVars r)
-      TSum l r -> TSum (substituteVars l) (substituteVars r)
-      TForall a tau' -> TForall a (substituteVars tau')
-      TMu a body -> TMu a (substituteVars body)
-      _ -> t
+getType :: Type -> UnionFind -> Type
+getType tau uf =
+  case getFreeVars tau of
+    [] -> tau
+    (x : _) ->
+      let r = find uf (TVar x)
+       in if r == TVar x
+            then getType (TForall x tau) uf
+            else getType (substituteVar x r tau) uf
 
 containsVar :: Variable -> Type -> Bool
 containsVar v = go

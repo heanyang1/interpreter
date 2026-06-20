@@ -19,7 +19,7 @@ data Type
   | TSum Type Type
   | TForall Variable Type
   | TMu Variable Type
-  deriving (Eq)
+  deriving (Eq, Ord)
 
 instance Show Type where
   show TNum = "num"

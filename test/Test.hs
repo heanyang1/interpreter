@@ -538,104 +538,66 @@ tFormatAstContent s label = TestCase $
 
 testUnionFind :: Test
 testUnionFind =
-  TestLabel "UnionFind" $
+  let a = TVar (VName "a")
+      b = TVar (VName "b")
+      c = TVar (VName "c")
+      d = TVar (VName "d")
+      e = TVar (VName "e")
+      z = TVar (VName "z")
+  in TestLabel "UnionFind" $
     TestList
       [ TestLabel "connected" $ TestCase $ do
-          let vs = map VName ["a", "b", "c"]
+          let vs = [a, b, c]
           let uf = mkUnionFind vs
-          result <- case connected uf (VName "a") (VName "b") of
-            Left err -> assertFailure err
-            Right r -> return r
-          assertBool "a and b not connected initially" (not result),
+          assertBool "a and b not connected initially" (find uf a /= find uf b),
         TestLabel "union_connected" $ TestCase $ do
-          let vs = map VName ["a", "b", "c"]
+          let vs = [a, b, c]
           let uf = mkUnionFind vs
-          (uf', _) <- case union uf (VName "a") (VName "b") of
-            Left err -> assertFailure err
-            Right r -> return r
-          result <- case connected uf' (VName "a") (VName "b") of
-            Left err -> assertFailure err
-            Right r -> return r
-          assertBool "a and b connected after union" result,
+          let uf' = unionBy (const 0) uf a b
+          assertBool "a and b connected after union" (find uf' a == find uf' b),
         TestLabel "find_not_found" $ TestCase $ do
-          let vs = [VName "a"]
+          let vs = [a]
           let uf = mkUnionFind vs
-          case find uf (VName "z") of
-            Left _ -> return ()
-            Right _ -> assertFailure "Expected error",
+          assertEqual "not found returns itself" z (find uf z),
         TestLabel "union_same" $ TestCase $ do
-          let vs = map VName ["a", "b"]
+          let vs = [a, b]
           let uf = mkUnionFind vs
-          (_, r) <- case union uf (VName "a") (VName "a") of
-            Left err -> assertFailure err
-            Right r -> return r
-          assertEqual "union same" (VName "a") r,
+          let uf' = unionBy (const 0) uf a a
+          assertEqual "union same" a (find uf' a),
         TestLabel "union_eq_rank" $ TestCase $ do
-          let vs = map VName ["a", "b"]
+          let vs = [a, b]
           let uf = mkUnionFind vs
-          (uf', _) <- case union uf (VName "a") (VName "b") of
-            Left err -> assertFailure err
-            Right r -> return r
-          rootA <- case find uf' (VName "a") of Left _ -> assertFailure "find"; Right r -> return r
-          rootB <- case find uf' (VName "b") of Left _ -> assertFailure "find"; Right r -> return r
-          assertEqual "both in same set" rootA rootB,
+          let uf' = unionBy (const 0) uf a b
+          assertEqual "both in same set" (find uf' a) (find uf' b),
         TestLabel "find_path_compression" $ TestCase $ do
-          let vs = map VName ["a", "b", "c"]
+          let vs = [a, b, c]
           let uf = mkUnionFind vs
-          (uf1, _) <- case union uf (VName "a") (VName "b") of
-            Left err -> assertFailure err
-            Right r -> return r
-          (uf2, _) <- case union uf1 (VName "b") (VName "c") of
-            Left err -> assertFailure err
-            Right r -> return r
-          _ <- case find uf2 (VName "a") of Left err -> assertFailure err; Right r -> return r
-          _ <- case find uf2 (VName "c") of Left err -> assertFailure err; Right r -> return r
-          conn <- case connected uf2 (VName "a") (VName "c") of
-            Left err -> assertFailure err
-            Right r -> return r
-          assertBool "a and c connected" conn,
+          let uf1 = unionBy (const 0) uf a b
+          let uf2 = unionBy (const 0) uf1 b c
+          let _ = find uf2 a
+          let _ = find uf2 c
+          assertBool "a and c connected" (find uf2 a == find uf2 c),
         TestLabel "find_rank_lt" $ TestCase $ do
-          let vs = map VName ["a", "b"]
+          let vs = [a, b]
           let uf0 = mkUnionFind vs
-          let uf1 = uf0 {rank = Map.insert (VName "b") 1 (rank uf0)}
-          (_, r) <- case union uf1 (VName "a") (VName "b") of
-            Left err -> assertFailure err
-            Right r -> return r
-          assertEqual "rank LT attaches to higher" (VName "b") r,
+          let uf1 = uf0 {rank = Map.insert b 1 (rank uf0)}
+          let uf' = unionBy (const 0) uf1 a b
+          assertEqual "rank LT attaches to higher" b (find uf' a),
         TestLabel "find_path_compression_depth" $ TestCase $ do
-          let vs = map VName ["a", "b", "c"]
+          let vs = [a, b, c]
           let uf = mkUnionFind vs
-          (uf1, _) <- case union uf (VName "a") (VName "b") of
-            Left err -> assertFailure err
-            Right r -> return r
-          (uf2, _) <- case union uf1 (VName "a") (VName "c") of
-            Left err -> assertFailure err
-            Right r -> return r
-          _ <- case find uf2 (VName "c") of
-            Left err -> assertFailure err
-            Right r -> return r
+          let uf1 = unionBy (const 0) uf a b
+          let uf2 = unionBy (const 0) uf1 a c
+          let _ = find uf2 c
           return (),
         TestLabel "find_with_compression" $ TestCase $ do
-          let vs = map VName ["a", "b", "c", "d", "e"]
+          let vs = [a, b, c, d, e]
           let uf = mkUnionFind vs
-          (uf1, _) <- case union uf (VName "d") (VName "e") of
-            Left err -> assertFailure err
-            Right r -> return r
-          (uf2, _) <- case union uf1 (VName "a") (VName "b") of
-            Left err -> assertFailure err
-            Right r -> return r
-          (uf3, _) <- case union uf2 (VName "a") (VName "c") of
-            Left err -> assertFailure err
-            Right r -> return r
-          -- now rank a = 2, rank d = 1
-          -- union a (rank 2) with d (rank 1) -> GT: d attaches to a
-          (uf4, _) <- case union uf3 (VName "a") (VName "d") of
-            Left err -> assertFailure err
-            Right r -> return r
-          -- now find e -> should trigger path compression: e -> d -> a
-          _ <- case find uf4 (VName "e") of
-            Left err -> assertFailure err
-            Right r -> return r
+          let uf1 = unionBy (const 0) uf d e
+          let uf2 = unionBy (const 0) uf1 a b
+          let uf3 = unionBy (const 0) uf2 a c
+          let uf4 = unionBy (const 0) uf3 a d
+          let _ = find uf4 e
           return ()
       ]
 
