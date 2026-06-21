@@ -266,15 +266,9 @@ unification' uf (c : cs) = case (typeL c, typeR c) of
      in if rootL == rootR
           then unification' uf cs
           else case (rootL, rootR) of
-            (TVar _, TVar _) ->
-              let uf' = unionBy typeLevel uf (TVar l) (TVar r)
-               in unification' uf' cs
-            (TVar _, _) ->
-              let uf' = uf {parent = Map.insert rootL rootR (parent uf)}
-               in unification' uf' cs
-            (_, TVar _) ->
-              let uf' = uf {parent = Map.insert rootR rootL (parent uf)}
-               in unification' uf' cs
+            (TVar _, TVar _) -> unification' (unionBy typeLevel uf rootL rootR) cs
+            (TVar _, _) -> unification' (unionBy typeLevel uf rootL rootR) cs
+            (_, TVar _) -> unification' (unionBy typeLevel uf rootL rootR) cs
             (TNum, TNum) -> unification' uf cs
             (TBool, TBool) -> unification' uf cs
             (TUnit, TUnit) -> unification' uf cs
@@ -284,9 +278,7 @@ unification' uf (c : cs) = case (typeL c, typeR c) of
       then
         let root = find uf (TVar v)
          in case root of
-              TVar _ ->
-                let uf' = unionBy typeLevel uf root t
-                 in unification' uf' cs
+              TVar _ -> unification' (unionBy typeLevel uf root t) cs
               _ -> case (root, t) of
                 (TNum, TNum) -> unification' uf cs
                 (TBool, TBool) -> unification' uf cs

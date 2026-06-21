@@ -589,7 +589,32 @@ testUnionFind =
           let uf3 = unionBy (const 0) uf2 a c
           let uf4 = unionBy (const 0) uf3 a d
           let _ = find uf4 e
-          return ()
+          return (),
+        TestLabel "unification_tvar_tvar_branch" $ TestCase $ do
+          let v1 = TVar (VName "x")
+          let v2 = TVar (VName "y")
+          case unification' mkUnionFind [Constraint v1 v2] of
+            Left err -> assertFailure $ "Expected success but got: " ++ err
+            Right uf' -> assertBool "x and y should be unified" (find uf' v1 == find uf' v2),
+        TestLabel "unification_tvar_num_branch_after_tvar_tvar" $ TestCase $ do
+          let v1 = TVar (VName "x")
+          let v2 = TVar (VName "y")
+          let constraints1 = [Constraint v1 v2, Constraint v1 TNum]
+          case unification' mkUnionFind constraints1 of
+            Left err -> assertFailure $ "Expected success but got: " ++ err
+            Right uf' -> do
+              assertEqual "x resolves to TNum" TNum (find uf' v1)
+              assertEqual "y resolves to TNum" TNum (find uf' v2),
+        TestLabel "unification_tvar_tvar_reachable_via_typed_expr" $ TestCase $ do
+          let expr = ECase
+                (EInject (ENum 5) L Nothing)
+                (VName "x")
+                (EVar (VDeBruijn 0))
+                (VName "y")
+                (ENum 3)
+          case typeCheck Eval expr of
+            Left err -> assertFailure $ "Type error: " ++ err
+            Right _ -> return ()
       ]
 
 testTryStep :: Test
